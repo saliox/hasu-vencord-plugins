@@ -102,14 +102,27 @@ interface ManagedSetting {
     when: () => boolean;
 }
 
+// NB : renderEmbeds n'est VOLONTAIREMENT PLUS piloté par le mode éco.
+// Le couper rendait invisibles tous les embeds (y compris ceux des bots dans
+// les salons de logs) et pouvait rester bloqué. DataSaver n'y touche plus jamais ;
+// il est même forcé sur "on" au démarrage (voir start()).
 const MANAGED: ManagedSetting[] = [
     { key: "gifAutoPlay", accessor: GifAutoPlay, eco: false, normal: true, when: () => settings.store.cutGifAutoPlay },
     { key: "animateEmoji", accessor: AnimateEmoji, eco: false, normal: true, when: () => settings.store.cutAnimations },
     { key: "animateStickers", accessor: AnimateStickers, eco: 2, normal: 0, when: () => settings.store.cutAnimations },
-    { key: "renderEmbeds", accessor: RenderEmbeds, eco: false, normal: true, when: () => settings.store.cutEmbeds },
     { key: "inlineAttachmentMedia", accessor: InlineAttachmentMedia, eco: false, normal: true, when: () => settings.store.cutInlineMedia },
     { key: "inlineEmbedMedia", accessor: InlineEmbedMedia, eco: false, normal: true, when: () => settings.store.cutInlineMedia }
 ];
+
+// force l'affichage des embeds — utilisable aussi à la volée (débogage / bar)
+function fixEmbeds() {
+    try {
+        if (RenderEmbeds.getSetting() !== true) RenderEmbeds.updateSetting(true);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 function enableEco(auto = false) {
     if (settings.store.ecoActive) return;
@@ -394,7 +407,14 @@ export default definePlugin({
                 forceNormal();
                 settings.store.healed = true;
             }
+            // toujours s'assurer que les embeds sont visibles au démarrage
+            fixEmbeds();
         }, 3000);
+    },
+
+    // méthode publique : réactive les embeds immédiatement (barre / débogage)
+    hasuFixEmbeds() {
+        return fixEmbeds();
     },
 
     stop() {

@@ -27,14 +27,16 @@ interface ToggleDef {
     /** nom du réglage de raccourci de ce plugin */
     shortcut: string;
     color: string;
-    icon: React.ReactNode;
+    /** chemin SVG (string). PAS un élément JSX : créer du JSX au niveau module
+     *  invoque React avant que Vencord soit prêt et casse tout le renderer. */
+    icon: string;
 }
 
 const ICON = {
-    data: <path fill="currentColor" d="M12 4a10 10 0 0 0-8.66 15 1 1 0 0 0 1.73-1A8 8 0 1 1 20 12a7.9 7.9 0 0 1-1.07 4 1 1 0 0 0 1.73 1A10 10 0 0 0 12 4Zm4.24 5.17a1 1 0 0 0-1.41 0l-3.54 3.54a2 2 0 1 0 1.41 1.41l3.54-3.54a1 1 0 0 0 0-1.41Z" />,
-    deaf: <path fill="currentColor" d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H5v-1a7 7 0 1 1 14 0v1h-3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h3a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9Z" />,
-    mask: <path fill="currentColor" d="M20.5 6c-2.6 0-4.9.8-6.5 2.1H10C8.4 6.8 6.1 6 3.5 6 2.7 6 2 6.7 2 7.5v4C2 14 4 16 6.5 16c2.2 0 4-1.5 4.4-3.5.2-.9 1-1.5 1.1-1.5s.9.6 1.1 1.5c.4 2 2.2 3.5 4.4 3.5 2.5 0 4.5-2 4.5-4.5v-4c0-.8-.7-1.5-1.5-1.5ZM6.5 14C5.1 14 4 12.9 4 11.5S5.1 9 6.5 9 9 10.1 9 11.5 7.9 14 6.5 14Zm11 0c-1.4 0-2.5-1.1-2.5-2.5S16.1 9 17.5 9 20 10.1 20 11.5 18.9 14 17.5 14Z" />,
-    clock: <path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8Zm.5-13H11v6.42l4.9 2.94.77-1.28-4.17-2.5Z" />
+    data: "M12 4a10 10 0 0 0-8.66 15 1 1 0 0 0 1.73-1A8 8 0 1 1 20 12a7.9 7.9 0 0 1-1.07 4 1 1 0 0 0 1.73 1A10 10 0 0 0 12 4Zm4.24 5.17a1 1 0 0 0-1.41 0l-3.54 3.54a2 2 0 1 0 1.41 1.41l3.54-3.54a1 1 0 0 0 0-1.41Z",
+    deaf: "M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H5v-1a7 7 0 1 1 14 0v1h-3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h3a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9Z",
+    mask: "M20.5 6c-2.6 0-4.9.8-6.5 2.1H10C8.4 6.8 6.1 6 3.5 6 2.7 6 2 6.7 2 7.5v4C2 14 4 16 6.5 16c2.2 0 4-1.5 4.4-3.5.2-.9 1-1.5 1.1-1.5s.9.6 1.1 1.5c.4 2 2.2 3.5 4.4 3.5 2.5 0 4.5-2 4.5-4.5v-4c0-.8-.7-1.5-1.5-1.5ZM6.5 14C5.1 14 4 12.9 4 11.5S5.1 9 6.5 9 9 10.1 9 11.5 7.9 14 6.5 14Zm11 0c-1.4 0-2.5-1.1-2.5-2.5S16.1 9 17.5 9 20 10.1 20 11.5 18.9 14 17.5 14Z",
+    clock: "M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8Zm.5-13H11v6.42l4.9 2.94.77-1.28-4.17-2.5Z"
 };
 
 const TOGGLES: ToggleDef[] = [
@@ -235,7 +237,7 @@ function Bar() {
                                 style={active ? { color: t.color } : undefined}
                                 onClick={() => fire(t)}
                             >
-                                <svg width="20" height="20" viewBox="0 0 24 24">{t.icon}</svg>
+                                <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d={t.icon} /></svg>
                                 {active && <span className={cl("dot")} style={{ background: t.color }} />}
                             </button>
                         )}
