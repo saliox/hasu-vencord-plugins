@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import { definePluginSettings } from "@api/Settings";
 import { disableStyle, enableStyle } from "@api/Styles";
 import { Margins } from "@utils/margins";
-import definePlugin, { OptionType } from "@utils/types";
-import { Forms } from "@webpack/common";
+import definePlugin, { IconComponent, OptionType } from "@utils/types";
+import { Forms, showToast, Toasts } from "@webpack/common";
 
 import cvStyle from "./contentVisibility.css?managed";
 import decoStyle from "./hideDecorations.css?managed";
@@ -16,6 +17,18 @@ import transStyle from "./instantUI.css?managed";
 import blurStyle from "./reduceBlur.css?managed";
 
 const settings = definePluginSettings({
+    active: {
+        type: OptionType.BOOLEAN,
+        description: "Optimisation active (basculée par le bouton ⚡)",
+        default: true,
+        hidden: true
+    },
+    showButton: {
+        type: OptionType.BOOLEAN,
+        description: "Afficher le bouton ⚡ on/off dans la barre de message",
+        default: true,
+        restartNeeded: true
+    },
     contentVisibility: {
         type: OptionType.BOOLEAN,
         description: "Ne rendre que ce qui est à l'écran (content-visibility) — messages et membres hors écran ne sont plus dessinés",
@@ -50,11 +63,59 @@ const STYLES: Array<[keyof typeof settings.store, string]> = [
 ];
 
 function apply() {
+    const on = settings.store.active;
     for (const [key, style] of STYLES) {
-        if (settings.store[key]) enableStyle(style);
+        if (on && settings.store[key]) enableStyle(style);
         else disableStyle(style);
     }
 }
+
+function toggleOptimizer() {
+    settings.store.active = !settings.store.active;
+    apply(); // effet immédiat, sans redémarrage
+    showToast(
+        settings.store.active
+            ? "Optimisation activée"
+            : "Optimisation désactivée (rendu Discord normal)",
+        Toasts.Type.SUCCESS
+    );
+}
+
+const OptiIcon: IconComponent = ({ height = 20, width = 20, className }) => {
+    const { active } = settings.use(["active"]);
+    return (
+        <svg
+            width={width}
+            height={height}
+            className={className}
+            viewBox="0 0 24 24"
+            style={{ scale: "1.1", color: active ? "var(--status-positive, #23a55a)" : "currentcolor" }}
+        >
+            <path
+                fill="currentColor"
+                d="M13 2 4.5 13H11l-1 9 9.5-12H13l0-8Z"
+            />
+            {!active && (
+                <path fill="var(--status-danger, #f23f43)" d="M3.3 2.6 21.4 20.7l-1.4 1.4L1.9 4 3.3 2.6Z" />
+            )}
+        </svg>
+    );
+};
+
+const OptiButton: ChatBarButtonFactory = ({ isMainChat }) => {
+    const { active, showButton } = settings.use(["active", "showButton"]);
+
+    if (!isMainChat || !showButton) return null;
+
+    return (
+        <ChatBarButton
+            tooltip={active ? "Optimisation ACTIVE — clic pour désactiver" : "Optimisation désactivée — clic pour activer"}
+            onClick={toggleOptimizer}
+        >
+            <OptiIcon />
+        </ChatBarButton>
+    );
+};
 
 export default definePlugin({
     name: "DiscordOptimizer",
@@ -63,6 +124,11 @@ export default definePlugin({
     authors: [{ name: "Saliox", id: 0n }],
     tags: ["Utility", "Appearance"],
     settings,
+
+    chatBarButton: {
+        icon: OptiIcon,
+        render: OptiButton
+    },
 
     start() {
         apply();
