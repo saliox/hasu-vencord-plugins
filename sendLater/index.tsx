@@ -7,6 +7,7 @@
 import "./styles.css";
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { ApplicationCommandInputType, ApplicationCommandOptionType, findOption, sendBotMessage } from "@api/Commands";
 import * as DataStore from "@api/DataStore";
 import { showNotification } from "@api/Notifications";
 import { definePluginSettings } from "@api/Settings";
@@ -114,6 +115,57 @@ function removeScheduled(id: string) {
     save();
 }
 
+function addScheduled(channelId: string, content: string, dueAt: number): ScheduledMessage {
+    const channel = ChannelStore.getChannel(channelId);
+    const msg: ScheduledMessage = {
+        id: crypto.randomUUID(),
+        channelId,
+        guildId: channel?.guild_id ?? undefined,
+        content,
+        dueAt,
+        createdAt: Date.now()
+    };
+    scheduled.push(msg);
+    save();
+    return msg;
+}
+
+/**
+ * Convertit une saisie utilisateur en horodatage d'envoi.
+ * Accepte les durées relatives ("10m", "1h30", "2h", "90s", "1d")
+ * et les heures absolues du jour ("20:00", "9h30").
+ * Renvoie null si la saisie est invalide ou dans le passé.
+ */
+function parseWhen(input: string): number | null {
+    const raw = input.trim().toLowerCase();
+    if (!raw) return null;
+
+    // heure absolue HH:MM ou HHhMM
+    const clock = raw.match(/^(\d{1,2})\s*[h:]\s*(\d{0,2})$/);
+    if (clock) {
+        const h = Number(clock[1]);
+        const m = clock[2] === "" ? 0 : Number(clock[2]);
+        if (h > 23 || m > 59) return null;
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+        return d.getTime();
+    }
+
+    // durée relative : somme des unités j/h/m/s
+    const units: Record<string, number> = { d: 86400_000, j: 86400_000, h: 3600_000, m: 60_000, s: 1000 };
+    const parts = raw.match(/\d+\s*[djhms]/g);
+    if (!parts) return null;
+    let ms = 0;
+    for (const part of parts) {
+        const value = parseInt(part, 10);
+        const unit = part.replace(/[\d\s]/g, "");
+        ms += value * (units[unit] ?? 0);
+    }
+    if (ms <= 0) return null;
+    return Date.now() + ms;
+}
+
 async function sendScheduled(msg: ScheduledMessage) {
     if (inFlight.has(msg.id)) return;
     inFlight.add(msg.id);
@@ -196,16 +248,7 @@ function ScheduleModal({ channelId, ...props }: RenderModalProps & { channelId: 
     const isContentValid = trimmed.length > 0 && trimmed.length <= MAX_CONTENT_LENGTH;
 
     function schedule() {
-        const channel = ChannelStore.getChannel(channelId);
-        scheduled.push({
-            id: crypto.randomUUID(),
-            channelId,
-            guildId: channel?.guild_id ?? undefined,
-            content: trimmed,
-            dueAt,
-            createdAt: Date.now()
-        });
-        save();
+        addScheduled(channelId, trimmed, dueAt);
         DraftManager.clearDraft(channelId, DraftType.ChannelMessage);
         props.onClose();
         showToast(
@@ -383,7 +426,8 @@ const SendLaterButton: ChatBarButtonFactory = ({ isMainChat, channel }) => {
 
 export default definePlugin({
     name: "SendLater",
-    description: "Planifie l'envoi de messages : écris, choisis l'heure, le message part tout seul tant que Discord est ouvert.",
+    // Bilingue / Bilingual — visible dans la liste des plugins Vencord
+    description: "Schedule messages to send later, while Discord stays open. / Planifie l'envoi de messages en différé, tant que Discord reste ouvert. (bouton horloge + commande /sendlater)",
     authors: [{ name: "Saliox", id: 0n }],
     tags: ["Chat", "Utility"],
     settings,
@@ -393,16 +437,77 @@ export default definePlugin({
         render: SendLaterButton
     },
 
+    commands: [{
+        name: "sendlater",
+        description: "Programmer un message dans ce salon / Schedule a message in this channel",
+        inputType: ApplicationCommandInputType.BUILT_IN,
+        options: [
+            {
+                name: "message",
+                description: "Le contenu à envoyer / The content to send",
+                type: ApplicationCommandOptionType.STRING,
+                required: true
+            },
+            {
+                name: "quand",
+                description: "Délai ou heure : 10m, 1h30, 2h, 90s, 1d, ou 20:00 / Delay or time: 10m, 1h30, 20:00…",
+                type: ApplicationCommandOptionType.STRING,
+                required: true
+            }
+        ],
+        execute: (args, ctx) => {
+            const content = findOption<string>(args, "message", "").trim();
+            const whenRaw = findOption<string>(args, "quand", "");
+            const dueAt = parseWhen(whenRaw);
+
+            if (!content) {
+                return sendBotMessage(ctx.channel.id, { content: "❌ Message vide. / Empty message." });
+            }
+            if (dueAt == null) {
+                return sendBotMessage(ctx.channel.id, {
+                    content: "❌ Heure invalide. Exemples : `10m`, `1h30`, `90s`, `1d`, `20:00`.\n❌ Invalid time. Examples: `10m`, `1h30`, `20:00`."
+                });
+            }
+
+            addScheduled(ctx.channel.id, content, dueAt);
+            sendBotMessage(ctx.channel.id, {
+                content: `✅ Message programmé pour <t:${Math.round(dueAt / 1000)}:F> (<t:${Math.round(dueAt / 1000)}:R>).\n✅ Scheduled for <t:${Math.round(dueAt / 1000)}:F>. — /sendlater`
+            });
+        }
+    }],
+
     settingsAboutComponent: () => (
         <>
+            <Forms.FormTitle>🇫🇷 Objectif</Forms.FormTitle>
             <Forms.FormText className={Margins.bottom8}>
-                Clique sur l'horloge dans la barre de message pour planifier le brouillon en cours.
-                Clic droit sur l'horloge pour voir et annuler les messages en attente.
+                <b>SendLater</b> te permet d'écrire un message maintenant et de le faire partir automatiquement
+                plus tard, à l'heure de ton choix. Idéal pour des annonces, des rappels ou pour poster à une heure
+                précise sans être devant l'écran.
             </Forms.FormText>
             <Forms.FormText className={Margins.bottom8}>
-                ⚠️ Les messages ne partent que si Discord est ouvert à l'heure prévue.
+                <b>Deux façons de l'utiliser :</b><br />
+                • Le bouton <b>horloge</b> dans la barre de message (clic = planifier le brouillon, clic droit = liste des messages en attente).<br />
+                • La commande <b>/sendlater</b> : <code>message</code> = le texte, <code>quand</code> = <code>10m</code>, <code>1h30</code>, <code>90s</code>, <code>1d</code> ou une heure comme <code>20:00</code>.
             </Forms.FormText>
-            <Button onClick={openListModal}>Voir les messages planifiés</Button>
+            <Forms.FormText className={Margins.bottom8}>
+                ⚠️ Les messages ne partent que si Discord est <b>ouvert</b> à l'heure prévue (planification côté client, pas serveur).
+            </Forms.FormText>
+
+            <Forms.FormTitle className={Margins.top16}>🇬🇧 Purpose</Forms.FormTitle>
+            <Forms.FormText className={Margins.bottom8}>
+                <b>SendLater</b> lets you write a message now and have it sent automatically later, at the time you
+                pick — great for announcements, reminders or posting at a precise time while you're away.
+            </Forms.FormText>
+            <Forms.FormText className={Margins.bottom8}>
+                <b>Two ways to use it:</b><br />
+                • The <b>clock</b> button in the chat bar (click = schedule your draft, right-click = pending list).<br />
+                • The <b>/sendlater</b> command: <code>message</code> = the text, <code>quand</code> = <code>10m</code>, <code>1h30</code>, <code>90s</code>, <code>1d</code> or a clock time like <code>20:00</code>.
+            </Forms.FormText>
+            <Forms.FormText className={Margins.bottom8}>
+                ⚠️ Messages only fire while Discord is <b>open</b> at the scheduled time (client-side scheduling, not server-side).
+            </Forms.FormText>
+
+            <Button onClick={openListModal}>Voir les messages planifiés / View scheduled messages</Button>
         </>
     ),
 
