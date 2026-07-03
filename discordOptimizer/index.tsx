@@ -31,7 +31,7 @@ const settings = definePluginSettings({
     },
     contentVisibility: {
         type: OptionType.BOOLEAN,
-        description: "Ne rendre que ce qui est à l'écran (content-visibility) — messages et membres hors écran ne sont plus dessinés",
+        description: "Ne rendre que ce qui est à l'écran dans la liste des membres (content-visibility). N'affecte PAS le chat (Discord le virtualise déjà) pour ne pas gêner le scroll rapide.",
         default: true,
         restartNeeded: true
     },
@@ -145,8 +145,8 @@ export default definePlugin({
                 <b>DiscordOptimizer</b> allège Discord côté <b>rendu graphique</b> uniquement :
             </Forms.FormText>
             <Forms.FormText className={Margins.bottom8}>
-                • <b>Ne rendre que le visible</b> — grâce à <code>content-visibility</code>, les messages et
-                membres hors écran ne sont plus dessinés ni calculés (scroll plus fluide, moins de CPU/GPU).<br />
+                • <b>Ne rendre que le visible</b> — <code>content-visibility</code> sur la liste des membres
+                (le chat est déjà virtualisé par Discord ; on n'y touche pas pour préserver le scroll rapide).<br />
                 • <b>Moins de flous</b> — retire les <code>backdrop-filter</code>, gros consommateurs de GPU.<br />
                 • <b>Transitions instantanées</b> — interface plus réactive.<br />
                 • <b>Décorations</b> (option) — masque déco d'avatar et plaques Nitro.

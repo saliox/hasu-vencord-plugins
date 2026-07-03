@@ -1,7 +1,14 @@
-/* Ne rend/layout que ce qui est visible ; mémorise la taille réelle (auto)
- * pour éviter les sauts de scroll. */
-[data-list-id="chat-messages"] > li,
+/* Ne rend/layout que ce qui est visible, sur des listes à HAUTEUR RÉGULIÈRE.
+ *
+ * NB : on N'APPLIQUE PAS content-visibility à la liste des messages
+ * ([data-list-id="chat-messages"]) : les messages ont des hauteurs très
+ * variables (embeds, images, multi-lignes), ce qui fausse le calcul de
+ * hauteur et casse le scroll rapide (le chat « revient à sa position »).
+ * Discord virtualise déjà le chat de toute façon.
+ *
+ * La liste des membres a des lignes de hauteur régulière : l'estimation est
+ * juste, donc pas de saut de scroll. */
 [data-list-id^="members"] > div {
     content-visibility: auto;
-    contain-intrinsic-size: auto 3rem;
+    contain-intrinsic-size: auto 44px;
 }
