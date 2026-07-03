@@ -41,7 +41,7 @@ const settings = definePluginSettings({
         description: "S'activer automatiquement quand le Mode Streamer de Discord est actif / Auto-enable when Discord Streamer Mode is on",
         default: true
     },
-    enabled: {
+    active: {
         type: OptionType.BOOLEAN,
         description: "Masquage actif (basculé par le bouton)",
         default: false,
@@ -50,7 +50,7 @@ const settings = definePluginSettings({
 });
 
 function isMaskingActive() {
-    if (settings.store.enabled) return true;
+    if (settings.store.active) return true;
     try {
         return settings.store.autoWithStreamerMode && StreamerModeStore.enabled;
     } catch {
@@ -68,8 +68,8 @@ function alias(id: string, prefix: string) {
 }
 
 const MaskIcon: IconComponent = ({ height = 20, width = 20, className }) => {
-    const { enabled } = settings.use(["enabled"]);
-    const active = enabled || isMaskingActive();
+    const { active: on } = settings.use(["active"]);
+    const active = on || isMaskingActive();
     return (
         <svg
             width={width}
@@ -87,7 +87,7 @@ const MaskIcon: IconComponent = ({ height = 20, width = 20, className }) => {
 };
 
 const MaskButton: ChatBarButtonFactory = ({ isMainChat }) => {
-    const { enabled } = settings.use(["enabled"]);
+    const { active: enabled } = settings.use(["active"]);
 
     if (!isMainChat) return null;
 
@@ -101,9 +101,9 @@ const MaskButton: ChatBarButtonFactory = ({ isMainChat }) => {
                     ? "Anonymat auto (Mode Streamer) — clic pour forcer/désactiver"
                     : "Anonymat stream : cacher ton pseudo et celui de tes amis"}
             onClick={() => {
-                settings.store.enabled = !settings.store.enabled;
+                settings.store.active = !settings.store.active;
                 showToast(
-                    settings.store.enabled
+                    settings.store.active
                         ? "Anonymat stream activé — bascule de salon pour rafraîchir les pseudos affichés"
                         : "Anonymat stream désactivé",
                     Toasts.Type.SUCCESS
@@ -138,20 +138,6 @@ export default definePlugin({
     chatBarButton: {
         icon: MaskIcon,
         render: MaskButton
-    },
-
-    // API pour la barre de contrôle Hasu (HasuControlBar)
-    hasuToggle() {
-        settings.store.enabled = !settings.store.enabled;
-        showToast(
-            settings.store.enabled
-                ? "Anonymat stream activé — bascule de salon pour rafraîchir les pseudos"
-                : "Anonymat stream désactivé",
-            Toasts.Type.SUCCESS
-        );
-    },
-    hasuActive() {
-        return isMaskingActive();
     },
 
     // appelée par le patch avec le nom résolu + l'objet utilisateur

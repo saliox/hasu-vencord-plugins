@@ -437,11 +437,6 @@ export default definePlugin({
         render: SendLaterButton
     },
 
-    // API pour la barre de contrôle Hasu (HasuControlBar) : action d'ouverture
-    hasuOpen() {
-        openListModal();
-    },
-
     commands: [{
         name: "sendlater",
         description: "Programmer un message dans ce salon / Schedule a message in this channel",

@@ -44,9 +44,9 @@ const settings = definePluginSettings({
         description: "Afficher aussi le bouton dans la barre de message",
         default: false
     },
-    enabled: {
+    active: {
         type: OptionType.BOOLEAN,
-        description: "État actuel",
+        description: "Casque fantôme actif",
         default: false,
         hidden: true
     },
@@ -67,7 +67,7 @@ function resendVoiceState() {
 }
 
 function setFakeDeafen(value: boolean) {
-    settings.store.enabled = value;
+    settings.store.active = value;
 
     if (settings.store.cutOutput) {
         if (value) {
@@ -89,7 +89,7 @@ function setFakeDeafen(value: boolean) {
 }
 
 const FakeDeafenIcon: IconComponent = ({ height = 20, width = 20, className }) => {
-    const { enabled } = settings.use(["enabled"]);
+    const { active: enabled } = settings.use(["active"]);
     return (
         <svg
             width={width}
@@ -113,7 +113,7 @@ const FakeDeafenIcon: IconComponent = ({ height = 20, width = 20, className }) =
 };
 
 const FakeDeafenButton: ChatBarButtonFactory = ({ isMainChat }) => {
-    const { enabled, chatButton } = settings.use(["enabled", "chatButton"]);
+    const { active: enabled, chatButton } = settings.use(["active", "chatButton"]);
 
     if (!isMainChat || !chatButton) return null;
 
@@ -122,7 +122,7 @@ const FakeDeafenButton: ChatBarButtonFactory = ({ isMainChat }) => {
             tooltip={enabled
                 ? "Casque fantôme ACTIF — les autres te voient muet, ton micro émet"
                 : "Casque fantôme : apparais muet casque tout en parlant"}
-            onClick={() => setFakeDeafen(!settings.store.enabled)}
+            onClick={() => setFakeDeafen(!settings.store.active)}
         >
             <FakeDeafenIcon />
         </ChatBarButton>
@@ -131,7 +131,7 @@ const FakeDeafenButton: ChatBarButtonFactory = ({ isMainChat }) => {
 
 // icône compacte 20x20 pour le panneau vocal (barré/rouge quand actif)
 function PanelIcon() {
-    const { enabled } = settings.use(["enabled"]);
+    const { active: enabled } = settings.use(["active"]);
     return (
         <svg width="20" height="20" viewBox="0 0 24 24">
             <path
@@ -146,7 +146,7 @@ function PanelIcon() {
 }
 
 function FakeDeafenPanelButton(props: { nameplate?: any; }) {
-    const { enabled, panelButton } = settings.use(["enabled", "panelButton"]);
+    const { active: enabled, panelButton } = settings.use(["active", "panelButton"]);
 
     if (!panelButton) return null;
 
@@ -160,7 +160,7 @@ function FakeDeafenPanelButton(props: { nameplate?: any; }) {
             aria-checked={enabled}
             redGlow={enabled}
             plated={props?.nameplate != null}
-            onClick={() => setFakeDeafen(!settings.store.enabled)}
+            onClick={() => setFakeDeafen(!settings.store.active)}
         />
     );
 }
@@ -192,22 +192,14 @@ export default definePlugin({
     ],
 
     fakeDeaf(real: boolean) {
-        return settings.store.enabled && settings.store.fakeDeaf ? true : real;
+        return settings.store.active && settings.store.fakeDeaf ? true : real;
     },
 
     fakeMute(real: boolean) {
-        return settings.store.enabled && settings.store.fakeMute ? true : real;
+        return settings.store.active && settings.store.fakeMute ? true : real;
     },
 
     renderPanelButton: ErrorBoundary.wrap(FakeDeafenPanelButton, { noop: true }),
-
-    // API pour la barre de contrôle Hasu (HasuControlBar)
-    hasuToggle() {
-        setFakeDeafen(!settings.store.enabled);
-    },
-    hasuActive() {
-        return settings.store.enabled;
-    },
 
     chatBarButton: {
         icon: FakeDeafenIcon,
@@ -216,9 +208,9 @@ export default definePlugin({
 
     stop() {
         // ne jamais laisser le casque réellement coupé en désactivant le plugin
-        if (settings.store.enabled && settings.store.cutOutput) {
+        if (settings.store.active && settings.store.cutOutput) {
             AudioActions.setOutputVolume(settings.store.savedVolume || 100);
         }
-        settings.store.enabled = false;
+        settings.store.active = false;
     }
 });

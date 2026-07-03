@@ -354,14 +354,6 @@ export default definePlugin({
         render: DataSaverButton
     },
 
-    // API pour la barre de contrôle Hasu (HasuControlBar)
-    hasuToggle() {
-        toggleEco();
-    },
-    hasuActive() {
-        return settings.store.ecoActive;
-    },
-
     flux: {
         RUNNING_GAMES_CHANGE({ games }: { games: unknown[]; }) {
             if (!settings.store.autoGame) return;
