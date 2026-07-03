@@ -1,0 +1,32 @@
+.vc-datasaver-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--background-modifier-accent);
+}
+
+.vc-datasaver-row:last-of-type {
+    border-bottom: none;
+}
+
+.vc-datasaver-muted {
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.vc-datasaver-good {
+    color: var(--status-positive, #23a55a);
+    text-align: right;
+}
+
+.vc-datasaver-mid {
+    color: var(--text-warning, #f0b232);
+    text-align: right;
+}
+
+.vc-datasaver-bad {
+    color: var(--status-danger, #f23f43);
+    text-align: right;
+}

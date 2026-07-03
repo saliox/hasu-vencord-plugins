@@ -1,0 +1,80 @@
+.vc-sendlater-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.vc-sendlater-date-picker {
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border, transparent);
+    border-radius: 4px;
+    box-sizing: border-box;
+    color: var(--text-default, var(--text-normal));
+    font-size: 16px;
+    height: 40px;
+    padding: 10px;
+    width: 100%;
+}
+
+.vc-sendlater-charcount {
+    margin-top: 4px;
+    text-align: right;
+    color: var(--text-muted);
+}
+
+.vc-sendlater-charcount-over {
+    color: var(--text-danger, var(--status-danger));
+}
+
+.vc-sendlater-preview {
+    margin-top: 8px;
+    color: var(--text-muted);
+}
+
+.vc-sendlater-empty {
+    padding: 24px 0;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.vc-sendlater-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: var(--background-secondary);
+}
+
+.vc-sendlater-item-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.vc-sendlater-item-when {
+    color: var(--text-muted);
+}
+
+.vc-sendlater-item-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.vc-sendlater-item-error {
+    color: var(--text-danger, var(--status-danger));
+}
+
+.vc-sendlater-item-late {
+    color: var(--text-warning, #f0b232);
+}
+
+.vc-sendlater-item-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
