@@ -9,7 +9,7 @@ Cinq userplugins pour [Vencord](https://github.com/Vendicated/Vencord), par **Sa
 | 🎧 **FakeDeafen** | Apparais casque/micro coupé aux yeux des autres tout en continuant de parler. Bouton dans le **panneau vocal** (à côté du micro). Option pour couper *réellement* ton casque. |
 | 📉 **DataSaver** | Réduit la consommation internet de Discord (images inline, GIFs, animations) avec **mode auto quand un jeu tourne**, et un panneau d'analyse de connexion (ping API/vocal, Wi-Fi/Ethernet) **sans collecter ni stocker d'IP**. |
 | 🎭 **StreamAnonymizer** | Pour le **streaming** : cache **ton pseudo ET celui de tes amis** partout (liste des membres, messages, mentions, vocal, MP). Alias stable par ami pour t'y retrouver. Auto avec le Mode Streamer de Discord. |
-| ⚡ **DiscordOptimizer** | Allège le **rendu** de Discord : ne dessine que ce qui est à l'écran (`content-visibility`), retire les flous GPU et rend les transitions instantanées. **Ne touche jamais** aux messages, notifications ni pings. |
+| ⚡ **DiscordOptimizer** | Allège le **rendu** de Discord : retire les flous GPU (`backdrop-filter`), transitions instantanées, décorations en option. Bouton ⚡ on/off. **Ne touche jamais** aux messages, notifications ni pings. |
 
 ## Installation
 
@@ -56,7 +56,7 @@ Puis, dans Discord : **Paramètres → Vencord → Plugins** → activer les plu
 - **FakeDeafen** — appear deafened/muted while still transmitting your mic; optional *real* output mute so you truly hear nothing.
 - **DataSaver** — low-data mode (embeds, inline media, GIFs, animations) with auto-enable while a game is running, plus a connection panel (API/voice ping, network type) that never collects or stores IPs.
 - **StreamAnonymizer** — for streaming: hides your own **and your friends'** usernames everywhere, with a stable per-friend alias; can follow Discord's Streamer Mode automatically.
-- **DiscordOptimizer** — lightens rendering only: `content-visibility` so off-screen messages/members aren't drawn, removes GPU blur, instant transitions. Never touches messages, notifications or pings.
+- **DiscordOptimizer** — lightens rendering only: removes expensive `backdrop-filter` GPU blur, instant transitions, optional decoration hiding, with a ⚡ on/off button. Never touches messages, notifications or pings.
 
 Install: copy each folder into `Vencord/src/userplugins/`, then `pnpm build` and enable in settings.
 

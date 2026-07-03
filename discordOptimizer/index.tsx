@@ -11,7 +11,6 @@ import { Margins } from "@utils/margins";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
 import { Forms, showToast, Toasts } from "@webpack/common";
 
-import cvStyle from "./contentVisibility.css?managed";
 import decoStyle from "./hideDecorations.css?managed";
 import transStyle from "./instantUI.css?managed";
 import blurStyle from "./reduceBlur.css?managed";
@@ -26,12 +25,6 @@ const settings = definePluginSettings({
     showButton: {
         type: OptionType.BOOLEAN,
         description: "Afficher le bouton ⚡ on/off dans la barre de message",
-        default: true,
-        restartNeeded: true
-    },
-    contentVisibility: {
-        type: OptionType.BOOLEAN,
-        description: "Ne rendre que ce qui est à l'écran dans la liste des membres (content-visibility). N'affecte PAS le chat (Discord le virtualise déjà) pour ne pas gêner le scroll rapide.",
         default: true,
         restartNeeded: true
     },
@@ -56,7 +49,6 @@ const settings = definePluginSettings({
 });
 
 const STYLES: Array<[keyof typeof settings.store, string]> = [
-    ["contentVisibility", cvStyle],
     ["reduceBlur", blurStyle],
     ["instantUI", transStyle],
     ["hideDecorations", decoStyle]
@@ -120,7 +112,7 @@ const OptiButton: ChatBarButtonFactory = ({ isMainChat }) => {
 export default definePlugin({
     name: "DiscordOptimizer",
     // Bilingue / Bilingual
-    description: "Optimise le rendu de Discord (ne dessine que ce qui est visible, moins de flous/animations) sans jamais toucher aux messages, notifications ni pings. / Optimises Discord rendering (only draws what's on screen, less blur/animation) without ever touching messages, notifications or pings.",
+    description: "Allège le rendu de Discord (moins de flous GPU, transitions instantanées, décorations en option) sans jamais toucher aux messages, notifications ni pings. / Lightens Discord rendering (less GPU blur, instant transitions, optional decorations) without ever touching messages, notifications or pings.",
     authors: [{ name: "Saliox", id: 0n }],
     tags: ["Utility", "Appearance"],
     settings,
@@ -145,8 +137,6 @@ export default definePlugin({
                 <b>DiscordOptimizer</b> allège Discord côté <b>rendu graphique</b> uniquement :
             </Forms.FormText>
             <Forms.FormText className={Margins.bottom8}>
-                • <b>Ne rendre que le visible</b> — <code>content-visibility</code> sur la liste des membres
-                (le chat est déjà virtualisé par Discord ; on n'y touche pas pour préserver le scroll rapide).<br />
                 • <b>Moins de flous</b> — retire les <code>backdrop-filter</code>, gros consommateurs de GPU.<br />
                 • <b>Transitions instantanées</b> — interface plus réactive.<br />
                 • <b>Décorations</b> (option) — masque déco d'avatar et plaques Nitro.
@@ -161,9 +151,8 @@ export default definePlugin({
 
             <Forms.FormTitle className={Margins.top16}>🇬🇧 Purpose</Forms.FormTitle>
             <Forms.FormText className={Margins.bottom8}>
-                <b>DiscordOptimizer</b> lightens Discord's <b>rendering</b> only: it draws just what's on screen
-                (<code>content-visibility</code> on off-screen messages/members), removes expensive
-                <code>backdrop-filter</code> blur, and makes transitions instant.
+                <b>DiscordOptimizer</b> lightens Discord's <b>rendering</b> only: it removes expensive
+                <code>backdrop-filter</code> blur and makes transitions instant (optionally hides decorations).
             </Forms.FormText>
             <Forms.FormText>
                 ✅ <b>Your notifications, mentions/pings and unread badges stay intact</b> — it only affects
