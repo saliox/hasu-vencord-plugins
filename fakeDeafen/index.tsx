@@ -30,8 +30,8 @@ const settings = definePluginSettings({
     },
     cutOutput: {
         type: OptionType.BOOLEAN,
-        description: "Couper réellement ton casque quand c'est activé (tu n'entends plus rien, mais ton micro continue d'émettre)",
-        default: true
+        description: "⚠️ Couper AUSSI ton casque en plus de l'apparence (tu n'entendras PLUS les autres). Laisse désactivé pour paraître sourd tout en entendant et parlant normalement.",
+        default: false
     },
     panelButton: {
         type: OptionType.BOOLEAN,
@@ -54,6 +54,12 @@ const settings = definePluginSettings({
         type: OptionType.NUMBER,
         description: "Volume de sortie sauvegardé",
         default: 100,
+        hidden: true
+    },
+    migrated: {
+        type: OptionType.BOOLEAN,
+        description: "Migration de l'ancien défaut cutOutput effectuée",
+        default: false,
         hidden: true
     }
 });
@@ -204,6 +210,21 @@ export default definePlugin({
     chatBarButton: {
         icon: FakeDeafenIcon,
         render: FakeDeafenButton
+    },
+
+    start() {
+        // Migration unique : l'ancien défaut coupait vraiment le casque (cutOutput=true),
+        // donc on n'entendait plus personne. On le désactive une fois pour toutes et on
+        // rétablit le volume s'il est resté coincé à 0.
+        if (!settings.store.migrated) {
+            settings.store.cutOutput = false;
+            settings.store.migrated = true;
+        }
+        try {
+            if (MediaEngineStore.getOutputVolume() === 0) {
+                AudioActions.setOutputVolume(settings.store.savedVolume || 100);
+            }
+        } catch { /* store vocal pas prêt */ }
     },
 
     stop() {
