@@ -6,13 +6,16 @@
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import { definePluginSettings } from "@api/Settings";
+import ErrorBoundary from "@components/ErrorBoundary";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
-import { findByPropsLazy, findStoreLazy } from "@webpack";
+import { findByPropsLazy, findComponentByCodeLazy, findStoreLazy } from "@webpack";
 import { SelectedChannelStore, showToast, Toasts } from "@webpack/common";
 
 const VoiceActions = findByPropsLazy("toggleSelfMute", "toggleSelfDeaf");
 const AudioActions = findByPropsLazy("setOutputVolume", "setInputVolume");
 const MediaEngineStore = findStoreLazy("MediaEngineStore");
+// bouton du panneau vocal (à côté du micro / casque / paramètres)
+const PanelButton = findComponentByCodeLazy(".GREEN,positionKeyStemOverride:");
 
 const settings = definePluginSettings({
     fakeDeaf: {
@@ -29,6 +32,17 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Couper réellement ton casque quand c'est activé (tu n'entends plus rien, mais ton micro continue d'émettre)",
         default: true
+    },
+    panelButton: {
+        type: OptionType.BOOLEAN,
+        description: "Afficher le bouton dans le panneau vocal, à côté du micro/casque",
+        default: true,
+        restartNeeded: true
+    },
+    chatButton: {
+        type: OptionType.BOOLEAN,
+        description: "Afficher aussi le bouton dans la barre de message",
+        default: false
     },
     enabled: {
         type: OptionType.BOOLEAN,
@@ -99,9 +113,9 @@ const FakeDeafenIcon: IconComponent = ({ height = 20, width = 20, className }) =
 };
 
 const FakeDeafenButton: ChatBarButtonFactory = ({ isMainChat }) => {
-    const { enabled } = settings.use(["enabled"]);
+    const { enabled, chatButton } = settings.use(["enabled", "chatButton"]);
 
-    if (!isMainChat) return null;
+    if (!isMainChat || !chatButton) return null;
 
     return (
         <ChatBarButton
@@ -114,6 +128,42 @@ const FakeDeafenButton: ChatBarButtonFactory = ({ isMainChat }) => {
         </ChatBarButton>
     );
 };
+
+// icône compacte 20x20 pour le panneau vocal (barré/rouge quand actif)
+function PanelIcon() {
+    const { enabled } = settings.use(["enabled"]);
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24">
+            <path
+                fill={enabled ? "var(--status-danger)" : "currentColor"}
+                d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H5v-1a7 7 0 1 1 14 0v1h-3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h3a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9Z"
+            />
+            {enabled && (
+                <path fill="var(--status-danger)" d="M3.3 2.6 21.4 20.7l-1.4 1.4L1.9 4 3.3 2.6Z" />
+            )}
+        </svg>
+    );
+}
+
+function FakeDeafenPanelButton(props: { nameplate?: any; }) {
+    const { enabled, panelButton } = settings.use(["enabled", "panelButton"]);
+
+    if (!panelButton) return null;
+
+    return (
+        <PanelButton
+            tooltipText={enabled
+                ? "Casque fantôme ACTIF — tu parais muet, ton micro émet"
+                : "Casque fantôme : parais muet casque tout en parlant"}
+            icon={PanelIcon}
+            role="switch"
+            aria-checked={enabled}
+            redGlow={enabled}
+            plated={props?.nameplate != null}
+            onClick={() => setFakeDeafen(!settings.store.enabled)}
+        />
+    );
+}
 
 export default definePlugin({
     name: "FakeDeafen",
@@ -130,6 +180,14 @@ export default definePlugin({
                 match: /self_mute:(\i),self_deaf:(\i),self_video:(\i)/,
                 replace: "self_mute:$self.fakeMute($1),self_deaf:$self.fakeDeaf($2),self_video:$3"
             }
+        },
+        {
+            // panneau de compte : injecte le bouton à côté du micro/casque/paramètres
+            find: "#{intl::USER_PROFILE_ACCOUNT_POPOUT_BUTTON_A11Y_LABEL}",
+            replacement: {
+                match: /children:\[(?=.{0,25}?accountContainerRef)/,
+                replace: "children:[$self.renderPanelButton(arguments[0]),"
+            }
         }
     ],
 
@@ -140,6 +198,8 @@ export default definePlugin({
     fakeMute(real: boolean) {
         return settings.store.enabled && settings.store.fakeMute ? true : real;
     },
+
+    renderPanelButton: ErrorBoundary.wrap(FakeDeafenPanelButton, { noop: true }),
 
     chatBarButton: {
         icon: FakeDeafenIcon,
