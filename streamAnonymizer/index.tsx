@@ -140,6 +140,20 @@ export default definePlugin({
         render: MaskButton
     },
 
+    // API pour la barre de contrôle Hasu (HasuControlBar)
+    hasuToggle() {
+        settings.store.enabled = !settings.store.enabled;
+        showToast(
+            settings.store.enabled
+                ? "Anonymat stream activé — bascule de salon pour rafraîchir les pseudos"
+                : "Anonymat stream désactivé",
+            Toasts.Type.SUCCESS
+        );
+    },
+    hasuActive() {
+        return isMaskingActive();
+    },
+
     // appelée par le patch avec le nom résolu + l'objet utilisateur
     mask(name: string, user: any) {
         try {

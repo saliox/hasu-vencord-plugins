@@ -201,6 +201,14 @@ export default definePlugin({
 
     renderPanelButton: ErrorBoundary.wrap(FakeDeafenPanelButton, { noop: true }),
 
+    // API pour la barre de contrôle Hasu (HasuControlBar)
+    hasuToggle() {
+        setFakeDeafen(!settings.store.enabled);
+    },
+    hasuActive() {
+        return settings.store.enabled;
+    },
+
     chatBarButton: {
         icon: FakeDeafenIcon,
         render: FakeDeafenButton
