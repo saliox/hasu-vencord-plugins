@@ -48,8 +48,8 @@ const settings = definePluginSettings({
     },
     cutEmbeds: {
         type: OptionType.BOOLEAN,
-        description: "Éco : couper les aperçus de liens (embeds)",
-        default: true
+        description: "Éco : couper les aperçus de liens (embeds). ⚠️ Rend invisibles les embeds des bots (logs, dashboards).",
+        default: false
     },
     cutInlineMedia: {
         type: OptionType.BOOLEAN,
@@ -83,32 +83,49 @@ const settings = definePluginSettings({
         description: "Réglages Discord sauvegardés avant le mode éco",
         default: "",
         hidden: true
+    },
+    healed: {
+        type: OptionType.BOOLEAN,
+        description: "Réparation unique de l'ancien bug d'embeds effectuée",
+        default: false,
+        hidden: true
     }
 });
+
+// table des réglages Discord pilotés par le mode éco.
+// `eco` = valeur en mode éco ; `normal` = valeur par défaut à restaurer.
+interface ManagedSetting {
+    key: string;
+    accessor: { getSetting(): any; updateSetting(value: any): any; };
+    eco: any;
+    normal: any;
+    when: () => boolean;
+}
+
+const MANAGED: ManagedSetting[] = [
+    { key: "gifAutoPlay", accessor: GifAutoPlay, eco: false, normal: true, when: () => settings.store.cutGifAutoPlay },
+    { key: "animateEmoji", accessor: AnimateEmoji, eco: false, normal: true, when: () => settings.store.cutAnimations },
+    { key: "animateStickers", accessor: AnimateStickers, eco: 2, normal: 0, when: () => settings.store.cutAnimations },
+    { key: "renderEmbeds", accessor: RenderEmbeds, eco: false, normal: true, when: () => settings.store.cutEmbeds },
+    { key: "inlineAttachmentMedia", accessor: InlineAttachmentMedia, eco: false, normal: true, when: () => settings.store.cutInlineMedia },
+    { key: "inlineEmbedMedia", accessor: InlineEmbedMedia, eco: false, normal: true, when: () => settings.store.cutInlineMedia }
+];
 
 function enableEco(auto = false) {
     if (settings.store.ecoActive) return;
 
     const saved: Record<string, unknown> = {};
-    if (settings.store.cutGifAutoPlay) {
-        saved.gifAutoPlay = GifAutoPlay.getSetting();
-        GifAutoPlay.updateSetting(false);
-    }
-    if (settings.store.cutAnimations) {
-        saved.animateEmoji = AnimateEmoji.getSetting();
-        saved.animateStickers = AnimateStickers.getSetting();
-        AnimateEmoji.updateSetting(false);
-        AnimateStickers.updateSetting(2); // 2 = ne jamais animer
-    }
-    if (settings.store.cutEmbeds) {
-        saved.renderEmbeds = RenderEmbeds.getSetting();
-        RenderEmbeds.updateSetting(false);
-    }
-    if (settings.store.cutInlineMedia) {
-        saved.inlineAttachmentMedia = InlineAttachmentMedia.getSetting();
-        saved.inlineEmbedMedia = InlineEmbedMedia.getSetting();
-        InlineAttachmentMedia.updateSetting(false);
-        InlineEmbedMedia.updateSetting(false);
+    for (const m of MANAGED) {
+        if (!m.when()) continue;
+        try {
+            const cur = m.accessor.getSetting();
+            // ne JAMAIS enregistrer une valeur déjà en mode éco comme référence :
+            // c'est ce qui bloquait renderEmbeds sur false après restauration
+            if (cur !== m.eco) {
+                saved[m.key] = cur;
+                m.accessor.updateSetting(m.eco);
+            }
+        } catch { /* store pas prêt : on ignore ce réglage */ }
     }
 
     settings.store.savedPrefs = JSON.stringify(saved);
@@ -126,13 +143,28 @@ function disableEco() {
         saved = {};
     }
 
-    if ("gifAutoPlay" in saved) GifAutoPlay.updateSetting(saved.gifAutoPlay);
-    if ("animateEmoji" in saved) AnimateEmoji.updateSetting(saved.animateEmoji);
-    if ("animateStickers" in saved) AnimateStickers.updateSetting(saved.animateStickers);
-    if ("renderEmbeds" in saved) RenderEmbeds.updateSetting(saved.renderEmbeds);
-    if ("inlineAttachmentMedia" in saved) InlineAttachmentMedia.updateSetting(saved.inlineAttachmentMedia);
-    if ("inlineEmbedMedia" in saved) InlineEmbedMedia.updateSetting(saved.inlineEmbedMedia);
+    for (const m of MANAGED) {
+        try {
+            // on restaure la valeur d'origine si on l'a enregistrée,
+            // sinon on remet la valeur normale par sécurité (jamais bloqué)
+            const target = (m.key in saved) ? saved[m.key] : m.normal;
+            if (m.accessor.getSetting() !== target) m.accessor.updateSetting(target);
+        } catch { /* store pas prêt */ }
+    }
 
+    settings.store.savedPrefs = "";
+    settings.store.ecoActive = false;
+    settings.store.autoEngaged = false;
+}
+
+// remet tous les réglages pilotés à leur valeur normale, quoi qu'il arrive.
+// Sert à la réparation unique et au nettoyage au démarrage.
+function forceNormal() {
+    for (const m of MANAGED) {
+        try {
+            if (m.accessor.getSetting() !== m.normal) m.accessor.updateSetting(m.normal);
+        } catch { /* store pas prêt */ }
+    }
     settings.store.savedPrefs = "";
     settings.store.ecoActive = false;
     settings.store.autoEngaged = false;
@@ -340,10 +372,33 @@ export default definePlugin({
                 Clic sur la jauge dans la barre de message : active/coupe le mode éco. Clic droit :
                 panneau d'état (ping, jeu détecté, interface réseau).
             </Forms.FormText>
-            <Forms.FormText>
+            <Forms.FormText className={Margins.bottom8}>
                 Le mode éco modifie des réglages Discord synchronisés à ton compte (GIFs, embeds,
-                images) et les restaure à l'identique quand il se désactive.
+                images) et les restaure quand il se désactive. Il ne survit pas à un redémarrage de
+                Discord : au démarrage, tous les réglages sont remis à la normale.
+            </Forms.FormText>
+            <Forms.FormText>
+                ⚠️ « Couper les embeds » est <b>désactivé par défaut</b> car il rend invisibles les
+                embeds des bots (salons de logs, dashboards).
             </Forms.FormText>
         </>
-    )
+    ),
+
+    start() {
+        // Le mode éco ne doit pas survivre à un redémarrage (sinon il laisse des réglages
+        // coupés sans moyen visible de les restaurer). On répare aussi une seule fois
+        // l'ancien bug qui laissait renderEmbeds/médias bloqués sur "off".
+        // Différé : laisse le store de réglages Discord se charger complètement.
+        setTimeout(() => {
+            if (settings.store.ecoActive || !settings.store.healed) {
+                forceNormal();
+                settings.store.healed = true;
+            }
+        }, 3000);
+    },
+
+    stop() {
+        // désactiver le plugin ne doit jamais laisser des réglages coupés
+        if (settings.store.ecoActive) disableEco();
+    }
 });
