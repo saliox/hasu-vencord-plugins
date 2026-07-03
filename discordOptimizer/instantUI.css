@@ -1,0 +1,7 @@
+/* Transitions instantanées (ne touche pas aux animations/spinners). */
+*,
+*::before,
+*::after {
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+}

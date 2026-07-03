@@ -1,0 +1,7 @@
+/* Ne rend/layout que ce qui est visible ; mémorise la taille réelle (auto)
+ * pour éviter les sauts de scroll. */
+[data-list-id="chat-messages"] > li,
+[data-list-id^="members"] > div {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 3rem;
+}

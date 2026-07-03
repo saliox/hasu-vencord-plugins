@@ -1,0 +1,6 @@
+/* Masque les décorations décoratives (déco d'avatar, plaques Nitro). */
+[class*="avatarDecoration"],
+[class*="nameplate"],
+[class*="Nameplate"] {
+    display: none !important;
+}

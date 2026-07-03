@@ -1,0 +1,7 @@
+/* Supprime les flous GPU coûteux (popouts, modales, tooltips). */
+*,
+*::before,
+*::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
