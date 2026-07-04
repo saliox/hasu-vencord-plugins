@@ -63,6 +63,7 @@ function isMaskingActive() {
 // Mémoïsé : mask() est appelé pour CHAQUE nom rendu (messages, membres,
 // mentions…), inutile de recalculer le hash à chaque fois.
 const aliasCache = new Map<string, string>();
+const ALIAS_CACHE_MAX = 5000;
 
 function alias(id: string, prefix: string) {
     const p = prefix || "Ami";
@@ -74,6 +75,8 @@ function alias(id: string, prefix: string) {
     for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
     const code = Math.abs(hash).toString(36).toUpperCase().padStart(4, "0").slice(0, 4);
     const result = `${p}-${code}`;
+    // borne mémoire : les alias sont déterministes, vider = sans effet visible
+    if (aliasCache.size >= ALIAS_CACHE_MAX) aliasCache.clear();
     aliasCache.set(key, result);
     return result;
 }

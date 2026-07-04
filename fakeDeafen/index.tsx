@@ -213,18 +213,20 @@ export default definePlugin({
     },
 
     start() {
-        // Migration unique : l'ancien défaut coupait vraiment le casque (cutOutput=true),
-        // donc on n'entendait plus personne. On le désactive une fois pour toutes et on
-        // rétablit le volume s'il est resté coincé à 0.
+        // Migration UNIQUE : l'ancien défaut coupait vraiment le casque (cutOutput=true),
+        // donc on n'entendait plus personne. On le désactive une fois pour toutes, et on
+        // rétablit le volume s'il est resté coincé à 0 par l'ancienne version.
+        // (Ne PAS rétablir le volume à chaque démarrage : l'utilisateur a le droit de
+        //  régler son volume à 0 lui-même.)
         if (!settings.store.migrated) {
             settings.store.cutOutput = false;
             settings.store.migrated = true;
+            try {
+                if (MediaEngineStore.getOutputVolume() === 0) {
+                    AudioActions.setOutputVolume(settings.store.savedVolume || 100);
+                }
+            } catch { /* store vocal pas prêt */ }
         }
-        try {
-            if (MediaEngineStore.getOutputVolume() === 0) {
-                AudioActions.setOutputVolume(settings.store.savedVolume || 100);
-            }
-        } catch { /* store vocal pas prêt */ }
     },
 
     stop() {

@@ -27,6 +27,7 @@ interface Target {
 
 let target: Target | null = null;
 let watchdog: number | undefined;
+let startupTimer: number | undefined;
 let missCount = 0;
 let lastRejoinAt = 0;
 
@@ -132,7 +133,8 @@ export default definePlugin({
             if (maxAge === 0 || ageMin <= maxAge) {
                 target = saved;
                 // rejoindre une fois la passerelle prête, si on n'est pas déjà en vocal
-                setTimeout(() => {
+                startupTimer = window.setTimeout(() => {
+                    startupTimer = undefined;
                     if (target && !SelectedChannelStore.getVoiceChannelId()) {
                         rejoin("redémarrage");
                     }
@@ -151,7 +153,9 @@ export default definePlugin({
 
     stop() {
         if (watchdog) window.clearInterval(watchdog);
+        if (startupTimer) window.clearTimeout(startupTimer);
         watchdog = undefined;
+        startupTimer = undefined;
     },
 
     settingsAboutComponent: () => (
