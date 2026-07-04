@@ -53,8 +53,12 @@ const STYLES: Array<[keyof typeof settings.store, string]> = [
     ["hideDecorations", decoStyle]
 ];
 
+// vrai seulement entre start() et stop() : évite qu'un onChange de réglage
+// n'injecte le CSS alors que le plugin est désactivé.
+let started = false;
+
 function apply() {
-    const on = settings.store.active;
+    const on = started && settings.store.active;
     for (const [key, style] of STYLES) {
         if (on && settings.store[key]) enableStyle(style);
         else disableStyle(style);
@@ -122,10 +126,12 @@ export default definePlugin({
     },
 
     start() {
+        started = true;
         apply();
     },
 
     stop() {
+        started = false;
         for (const [, style] of STYLES) disableStyle(style);
     },
 

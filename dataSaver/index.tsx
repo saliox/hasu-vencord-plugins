@@ -157,11 +157,12 @@ function disableEco() {
     }
 
     for (const m of MANAGED) {
+        // ne restaurer QUE ce que l'éco a réellement modifié (présent dans saved).
+        // Ne pas toucher aux réglages que l'utilisateur avait déjà à cette valeur
+        // ou qu'il a exclus de l'éco : sinon on écrase ses propres préférences.
+        if (!(m.key in saved)) continue;
         try {
-            // on restaure la valeur d'origine si on l'a enregistrée,
-            // sinon on remet la valeur normale par sécurité (jamais bloqué)
-            const target = (m.key in saved) ? saved[m.key] : m.normal;
-            if (m.accessor.getSetting() !== target) m.accessor.updateSetting(target);
+            if (m.accessor.getSetting() !== saved[m.key]) m.accessor.updateSetting(saved[m.key]);
         } catch { /* store pas prêt */ }
     }
 
@@ -394,15 +395,19 @@ export default definePlugin({
     ),
 
     start() {
-        // Le mode éco ne doit pas survivre à un redémarrage (sinon il laisse des réglages
-        // coupés sans moyen visible de les restaurer). On répare aussi une seule fois
-        // l'ancien bug qui laissait renderEmbeds/médias bloqués sur "off".
+        // état éco PERSISTÉ (avant qu'un éventuel jeu ne le rallume cette session)
+        const ecoWasPersisted = settings.store.ecoActive;
+        // Le mode éco ne doit pas survivre à un redémarrage. On répare aussi une seule
+        // fois l'ancien bug qui laissait renderEmbeds/médias bloqués sur "off".
         // Différé : laisse le store de réglages Discord se charger complètement.
         setTimeout(() => {
-            if (settings.store.ecoActive || !settings.store.healed) {
+            // NE PAS couper l'éco si un jeu tourne : il vient (légitimement) d'être
+            // rallumé par la détection de jeu au démarrage.
+            const gameRunning = (RunningGameStore.getRunningGames?.() ?? []).length > 0;
+            if ((ecoWasPersisted || !settings.store.healed) && !gameRunning) {
                 forceNormal();
-                settings.store.healed = true;
             }
+            settings.store.healed = true;
             // toujours s'assurer que les embeds sont visibles au démarrage
             fixEmbeds();
         }, 3000);

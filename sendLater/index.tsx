@@ -136,34 +136,52 @@ function addScheduled(channelId: string, content: string, dueAt: number): Schedu
  * et les heures absolues du jour ("20:00", "9h30").
  * Renvoie null si la saisie est invalide ou dans le passé.
  */
+const DURATION_UNITS: Record<string, number> = { d: 86400_000, j: 86400_000, h: 3600_000, m: 60_000, s: 1000 };
+
+/**
+ * Somme une durée. Un nombre SANS unité juste après h/j/d = minutes, après m =
+ * secondes — ainsi "1h30" = 1 h 30 min (et pas "1 h" ni une heure d'horloge).
+ */
+function parseDuration(raw: string): number | null {
+    const re = /(\d+)\s*([djhms]?)/g;
+    let ms = 0, matched = false;
+    let lastUnit: string | null = null;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(raw)) !== null) {
+        const value = parseInt(m[1], 10);
+        let unit = m[2];
+        if (!unit) {
+            if (lastUnit === "h" || lastUnit === "j" || lastUnit === "d") unit = "m";
+            else if (lastUnit === "m") unit = "s";
+            else return null; // nombre nu sans contexte (ex. "30")
+        }
+        ms += value * (DURATION_UNITS[unit] ?? 0);
+        lastUnit = unit;
+        matched = true;
+    }
+    return matched && ms > 0 ? ms : null;
+}
+
 function parseWhen(input: string): number | null {
     const raw = input.trim().toLowerCase();
     if (!raw) return null;
 
-    // heure absolue HH:MM ou HHhMM
-    const clock = raw.match(/^(\d{1,2})\s*[h:]\s*(\d{0,2})$/);
+    // heure absolue = format à DEUX-POINTS uniquement (ex. 20:00), pour ne pas
+    // confondre avec une durée type "1h30".
+    const clock = raw.match(/^(\d{1,2}):(\d{2})$/);
     if (clock) {
         const h = Number(clock[1]);
-        const m = clock[2] === "" ? 0 : Number(clock[2]);
-        if (h > 23 || m > 59) return null;
+        const min = Number(clock[2]);
+        if (h > 23 || min > 59) return null;
         const d = new Date();
-        d.setHours(h, m, 0, 0);
+        d.setHours(h, min, 0, 0);
         if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
         return d.getTime();
     }
 
-    // durée relative : somme des unités j/h/m/s
-    const units: Record<string, number> = { d: 86400_000, j: 86400_000, h: 3600_000, m: 60_000, s: 1000 };
-    const parts = raw.match(/\d+\s*[djhms]/g);
-    if (!parts) return null;
-    let ms = 0;
-    for (const part of parts) {
-        const value = parseInt(part, 10);
-        const unit = part.replace(/[\d\s]/g, "");
-        ms += value * (units[unit] ?? 0);
-    }
-    if (ms <= 0) return null;
-    return Date.now() + ms;
+    // durée relative
+    const ms = parseDuration(raw);
+    return ms == null ? null : Date.now() + ms;
 }
 
 async function sendScheduled(msg: ScheduledMessage) {

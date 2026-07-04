@@ -30,6 +30,7 @@ let watchdog: number | undefined;
 let startupTimer: number | undefined;
 let missCount = 0;
 let lastRejoinAt = 0;
+let rtcState = ""; // état de la connexion vocale RTC (via RTC_CONNECTION_STATE)
 
 const settings = definePluginSettings({
     reconnectOnDrop: {
@@ -85,19 +86,29 @@ function tick() {
 
     const current = SelectedChannelStore.getVoiceChannelId();
 
-    if (current) {
-        // on est bien en vocal ; si un admin nous a déplacés, on suit sans se battre
-        if (current !== target.channelId) {
-            target = { channelId: current, at: Date.now() };
-            saveTarget();
-        }
+    // suivre un déplacement (admin ou manuel) sans se battre
+    if (current && current !== target.channelId) {
+        target = { channelId: current, at: Date.now() };
+        saveTarget();
+    }
+
+    // connecté au bon salon ET RTC pas tombé => tout va bien.
+    // (rtcState vide au départ = on fait confiance à getVoiceChannelId)
+    const rtcDown = rtcState === "RTC_DISCONNECTED" || rtcState === "DISCONNECTED";
+    if (current === target.channelId && !rtcDown) {
         missCount = 0;
         return;
     }
 
-    // current est null = on n'est plus en vocal du tout.
-    // (un départ VOLONTAIRE a mis target à null via VOICE_CHANNEL_SELECT, donc on
-    //  n'arrive ici que sur une coupure subie.)
+    // Discord est en train de (re)connecter tout seul : on le laisse faire
+    if (rtcState === "RTC_CONNECTING") {
+        missCount = 0;
+        return;
+    }
+
+    // Ici : soit on n'est plus dans le salon (current null / différent), soit le
+    // RTC est tombé alors que le salon reste sélectionné = coupure subie.
+    // (un départ VOLONTAIRE a mis target à null via VOICE_CHANNEL_SELECT.)
     if (!navigator.onLine) return; // hors-ligne : inutile d'essayer, on attend
 
     missCount++;
@@ -116,11 +127,18 @@ export default definePlugin({
     settings,
 
     flux: {
-        // l'utilisateur sélectionne un salon vocal (rejoint / se déplace / quitte) = son INTENTION
+        // l'utilisateur sélectionne un salon vocal (rejoint / se déplace / quitte) = son INTENTION.
+        // NB : cet événement n'est PAS émis par une coupure réseau, seulement par une action
+        // explicite (bouton, déplacement, déconnexion) — donc target ne s'efface qu'à un départ voulu.
         VOICE_CHANNEL_SELECT({ channelId }: { channelId: string | null; }) {
             target = channelId ? { channelId, at: Date.now() } : null;
             saveTarget();
             missCount = 0;
+        },
+        // état réel de la connexion vocale ; on ignore les autres contextes (stream…)
+        RTC_CONNECTION_STATE({ state, context }: { state: string; context?: string; }) {
+            if (context && context !== "default") return;
+            rtcState = state;
         }
     },
 
