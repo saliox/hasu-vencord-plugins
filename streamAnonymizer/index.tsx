@@ -59,12 +59,23 @@ function isMaskingActive() {
 }
 
 // alias stable et déterministe dérivé de l'id : le streamer reconnaît qui
-// est qui, mais l'id/pseudo réel ne fuite jamais à l'écran
+// est qui, mais l'id/pseudo réel ne fuite jamais à l'écran.
+// Mémoïsé : mask() est appelé pour CHAQUE nom rendu (messages, membres,
+// mentions…), inutile de recalculer le hash à chaque fois.
+const aliasCache = new Map<string, string>();
+
 function alias(id: string, prefix: string) {
+    const p = prefix || "Ami";
+    const key = p + ":" + id;
+    const cached = aliasCache.get(key);
+    if (cached !== undefined) return cached;
+
     let hash = 0;
     for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
     const code = Math.abs(hash).toString(36).toUpperCase().padStart(4, "0").slice(0, 4);
-    return `${prefix || "Ami"}-${code}`;
+    const result = `${p}-${code}`;
+    aliasCache.set(key, result);
+    return result;
 }
 
 const MaskIcon: IconComponent = ({ height = 20, width = 20, className }) => {
@@ -140,25 +151,26 @@ export default definePlugin({
         render: MaskButton
     },
 
-    // appelée par le patch avec le nom résolu + l'objet utilisateur
+    // appelée par le patch avec le nom résolu + l'objet utilisateur.
+    // Chemin CHAUD (chaque nom rendu) : on sort au plus vite et on lit
+    // settings.store une seule fois.
     mask(name: string, user: any) {
         try {
             if (!isMaskingActive()) return name;
-            if (!user || typeof user !== "object") return name;
+            if (!user || typeof user !== "object" || !user.id) return name;
 
-            const id: string | undefined = user.id;
-            if (!id) return name;
+            const id: string = user.id;
+            const s = settings.store;
 
-            const me = UserStore.getCurrentUser();
-            if (settings.store.hideSelf && me && id === me.id) {
-                return settings.store.selfName || "Streamer";
+            if (s.hideSelf && id === UserStore.getCurrentUser()?.id) {
+                return s.selfName || "Streamer";
             }
 
-            if (settings.store.hideFriends && RelationshipStore.isFriend(id)) {
-                return alias(id, settings.store.friendPrefix);
+            if (s.hideFriends && RelationshipStore.isFriend(id)) {
+                return alias(id, s.friendPrefix);
             }
 
-            if (settings.store.hideEveryone) {
+            if (s.hideEveryone) {
                 return alias(id, "User");
             }
 

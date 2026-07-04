@@ -25,26 +25,25 @@ const settings = definePluginSettings({
     showButton: {
         type: OptionType.BOOLEAN,
         description: "Afficher le bouton ⚡ on/off dans la barre de message",
-        default: true,
-        restartNeeded: true
+        default: true
     },
     reduceBlur: {
         type: OptionType.BOOLEAN,
         description: "Supprimer les flous d'arrière-plan (gros gain GPU sur les popouts/modales)",
         default: true,
-        restartNeeded: true
+        onChange: () => apply()
     },
     instantUI: {
         type: OptionType.BOOLEAN,
         description: "Transitions instantanées (interface plus légère et réactive)",
         default: true,
-        restartNeeded: true
+        onChange: () => apply()
     },
     hideDecorations: {
         type: OptionType.BOOLEAN,
         description: "Masquer les décorations d'avatar et plaques Nitro (rendu allégé)",
         default: false,
-        restartNeeded: true
+        onChange: () => apply()
     }
 });
 
@@ -146,7 +145,7 @@ export default definePlugin({
                 le plugin ne touche qu'à l'affichage, jamais aux événements ni au réseau.
             </Forms.FormText>
             <Forms.FormText className={Margins.bottom8}>
-                Chaque option nécessite un petit « Restart » de Vencord pour s'appliquer.
+                Les options s'appliquent <b>instantanément</b> (pas besoin de redémarrer).
             </Forms.FormText>
 
             <Forms.FormTitle className={Margins.top16}>🇬🇧 Purpose</Forms.FormTitle>

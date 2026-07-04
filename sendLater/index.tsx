@@ -463,6 +463,11 @@ export default definePlugin({
             if (!content) {
                 return sendBotMessage(ctx.channel.id, { content: "❌ Message vide. / Empty message." });
             }
+            if (content.length > MAX_CONTENT_LENGTH) {
+                return sendBotMessage(ctx.channel.id, {
+                    content: `❌ Message trop long (${content.length}/${MAX_CONTENT_LENGTH}). / Message too long.`
+                });
+            }
             if (dueAt == null) {
                 return sendBotMessage(ctx.channel.id, {
                     content: "❌ Heure invalide. Exemples : `10m`, `1h30`, `90s`, `1d`, `20:00`.\n❌ Invalid time. Examples: `10m`, `1h30`, `20:00`."

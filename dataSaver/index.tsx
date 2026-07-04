@@ -213,10 +213,14 @@ function StatusModal(props: RenderModalProps) {
         for (let i = 0; i < 3; i++) {
             const t0 = performance.now();
             try {
-                await fetch("https://discord.com/api/v10/gateway", { cache: "no-store" });
+                // timeout de 3 s pour ne jamais rester bloqué sur "mesure en cours"
+                await fetch("https://discord.com/api/v10/gateway", {
+                    cache: "no-store",
+                    signal: AbortSignal.timeout(3000)
+                });
                 samples.push(performance.now() - t0);
             } catch {
-                // hors-ligne ou bloqué : ignoré, le verdict passera en "mesure impossible"
+                // hors-ligne, bloqué ou timeout : ignoré, verdict "mesure impossible"
             }
         }
         setPing(samples.length ? Math.round(Math.min(...samples)) : -1);
