@@ -1,7 +1,7 @@
 # Hasu Vencord Plugins
 
-Cinq userplugins pour [Vencord](https://github.com/Vendicated/Vencord), par **Saliox**.
-*Five Vencord userplugins — English summary below.*
+Six userplugins pour [Vencord](https://github.com/Vendicated/Vencord), par **Saliox**.
+*Six Vencord userplugins — English summary below.*
 
 | Plugin | Description |
 | --- | --- |
@@ -10,6 +10,7 @@ Cinq userplugins pour [Vencord](https://github.com/Vendicated/Vencord), par **Sa
 | 📉 **DataSaver** | Réduit la consommation internet de Discord (images inline, GIFs, animations) avec **mode auto quand un jeu tourne**, et un panneau d'analyse de connexion (ping API/vocal, Wi-Fi/Ethernet) **sans collecter ni stocker d'IP**. |
 | 🎭 **StreamAnonymizer** | Pour le **streaming** : cache **ton pseudo ET celui de tes amis** partout (liste des membres, messages, mentions, vocal, MP). Alias stable par ami pour t'y retrouver. Auto avec le Mode Streamer de Discord. |
 | ⚡ **DiscordOptimizer** | Allège le **rendu** de Discord : retire les flous GPU (`backdrop-filter`), transitions instantanées, décorations en option. Bouton ⚡ on/off. **Ne touche jamais** aux messages, notifications ni pings. |
+| 🔁 **VoiceAutoReconnect** | Te **reconnecte automatiquement** à ton salon vocal après une coupure réseau ou un redémarrage de Discord. Ne te ramène pas si tu as quitté volontairement ; suit les déplacements admin. |
 
 ## Installation
 
@@ -26,6 +27,7 @@ pnpm install --frozen-lockfile
 #   Vencord/src/userplugins/dataSaver/
 #   Vencord/src/userplugins/streamAnonymizer/
 #   Vencord/src/userplugins/discordOptimizer/
+#   Vencord/src/userplugins/voiceAutoReconnect/
 
 pnpm build
 pnpm inject   # une seule fois, pour brancher Discord sur votre build
@@ -41,7 +43,8 @@ Puis, dans Discord : **Paramètres → Vencord → Plugins** → activer les plu
 - **FakeDeafen** : icône casque. Clic = basculer. Rouge = actif. Réglages : apparence (deaf/mute) et coupure réelle du son.
 - **DataSaver** : icône jauge. Clic = mode éco. Clic droit = état de la connexion. Le mode auto s'active/se coupe tout seul avec vos jeux. Les réglages Discord modifiés sont **sauvegardés puis restaurés à l'identique**.
 - **StreamAnonymizer** : icône masque. Clic = activer/désactiver. Ou laisse-le suivre le **Mode Streamer** de Discord. Après activation, change de salon pour rafraîchir les pseudos déjà affichés.
-- **DiscordOptimizer** : rien à cliquer — active-le et règle les options dans ses réglages (chaque option demande un « Restart » de Vencord). Purement visuel : notifications, mentions/pings et non-lus intacts.
+- **DiscordOptimizer** : bouton ⚡ dans la barre de message pour tout couper/activer en direct. Options (flous, transitions, décorations) réglables et instantanées.
+- **VoiceAutoReconnect** : rien à faire — active-le. Il retient ton salon vocal et t'y reconnecte après une coupure réseau ou un redémarrage de Discord. Réglages : reconnexion sur coupure / au démarrage, et ancienneté max au démarrage.
 
 ## Notes
 
@@ -57,6 +60,7 @@ Puis, dans Discord : **Paramètres → Vencord → Plugins** → activer les plu
 - **DataSaver** — low-data mode (embeds, inline media, GIFs, animations) with auto-enable while a game is running, plus a connection panel (API/voice ping, network type) that never collects or stores IPs.
 - **StreamAnonymizer** — for streaming: hides your own **and your friends'** usernames everywhere, with a stable per-friend alias; can follow Discord's Streamer Mode automatically.
 - **DiscordOptimizer** — lightens rendering only: removes expensive `backdrop-filter` GPU blur, instant transitions, optional decoration hiding, with a ⚡ on/off button. Never touches messages, notifications or pings.
+- **VoiceAutoReconnect** — automatically rejoins your voice channel after a network drop or a Discord restart. Won't bring you back if you left on purpose; follows admin moves.
 
 Install: copy each folder into `Vencord/src/userplugins/`, then `pnpm build` and enable in settings.
 
