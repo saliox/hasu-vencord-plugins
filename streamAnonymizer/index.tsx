@@ -8,7 +8,7 @@ import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import { definePluginSettings } from "@api/Settings";
 import { Margins } from "@utils/margins";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
-import { Forms, RelationshipStore, showToast, StreamerModeStore, Toasts, UserStore } from "@webpack/common";
+import { Forms, RelationshipStore, showToast, StreamerModeStore, Toasts, UserStore, useStateFromStores } from "@webpack/common";
 
 const settings = definePluginSettings({
     hideSelf: {
@@ -82,8 +82,11 @@ function alias(id: string, prefix: string) {
 }
 
 const MaskIcon: IconComponent = ({ height = 20, width = 20, className }) => {
-    const { active: on } = settings.use(["active"]);
-    const active = on || isMaskingActive();
+    settings.use(["active"]); // re-render au basculement du bouton
+    // s'abonne AUSSI au Mode Streamer natif : sinon l'icône reste figée quand
+    // l'utilisateur (dés)active le Mode Streamer de Discord alors que le
+    // masquage auto est en jeu. On dérive l'état de isMaskingActive().
+    const active = useStateFromStores([StreamerModeStore], () => isMaskingActive());
     return (
         <svg
             width={width}
@@ -102,10 +105,13 @@ const MaskIcon: IconComponent = ({ height = 20, width = 20, className }) => {
 
 const MaskButton: ChatBarButtonFactory = ({ isMainChat }) => {
     const { active: enabled } = settings.use(["active"]);
+    // abonnement au Mode Streamer natif AVANT tout return (règle des hooks) :
+    // maintient l'infobulle à jour quand le Mode Streamer change.
+    const masking = useStateFromStores([StreamerModeStore], () => isMaskingActive());
 
     if (!isMainChat) return null;
 
-    const auto = !enabled && isMaskingActive();
+    const auto = !enabled && masking;
 
     return (
         <ChatBarButton

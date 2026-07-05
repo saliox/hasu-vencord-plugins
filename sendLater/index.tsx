@@ -79,11 +79,16 @@ const settings = definePluginSettings({
 
 let scheduled: ScheduledMessage[] = [];
 let sweepTimer: number | undefined;
+let missedNotifyTimer: number | undefined;
 const inFlight = new Set<string>();
 const listeners = new Set<() => void>();
 
 function save() {
-    DataStore.set(STORAGE_KEY, scheduled);
+    // persistance best-effort : on ne bloque pas l'UI dessus, mais on capture
+    // toute erreur de stockage pour éviter une promesse rejetée non gérée.
+    DataStore.set(STORAGE_KEY, scheduled).catch(e =>
+        console.error("[SendLater] échec de la persistance:", e)
+    );
     listeners.forEach(l => l());
 }
 
@@ -548,14 +553,20 @@ export default definePlugin({
                 save();
             }
             if (behavior !== "send") {
-                // laisse le client finir de démarrer avant de notifier
-                setTimeout(() => showNotification({
-                    title: "Send Later",
-                    body: behavior === "drop"
-                        ? `${missed.length} message(s) planifié(s) abandonné(s) (heure dépassée pendant que Discord était fermé).`
-                        : `${missed.length} message(s) planifié(s) ont dépassé leur heure pendant que Discord était fermé. Clique pour les gérer.`,
-                    onClick: behavior === "drop" ? undefined : openListModal
-                }), 5000);
+                // laisse le client finir de démarrer avant de notifier.
+                // On mémorise l'id pour l'annuler dans stop() si le plugin est
+                // désactivé dans la fenêtre des 5 s (sinon le callback différé
+                // s'exécuterait contre un client arrêté).
+                missedNotifyTimer = window.setTimeout(() => {
+                    missedNotifyTimer = undefined;
+                    showNotification({
+                        title: "Send Later",
+                        body: behavior === "drop"
+                            ? `${missed.length} message(s) planifié(s) abandonné(s) (heure dépassée pendant que Discord était fermé).`
+                            : `${missed.length} message(s) planifié(s) ont dépassé leur heure pendant que Discord était fermé. Clique pour les gérer.`,
+                        onClick: behavior === "drop" ? undefined : openListModal
+                    });
+                }, 5000);
             }
         }
 
@@ -565,5 +576,7 @@ export default definePlugin({
     stop() {
         if (sweepTimer) window.clearInterval(sweepTimer);
         sweepTimer = undefined;
+        if (missedNotifyTimer) window.clearTimeout(missedNotifyTimer);
+        missedNotifyTimer = undefined;
     }
 });

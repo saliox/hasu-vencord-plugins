@@ -77,11 +77,13 @@ function setFakeDeafen(value: boolean) {
 
     if (settings.store.cutOutput) {
         if (value) {
-            const current = MediaEngineStore.getOutputVolume();
-            if (current > 0) settings.store.savedVolume = current;
+            // capture le volume réel AVANT de forcer à 0, sans condition :
+            // si l'utilisateur avait déjà 0, on doit restaurer 0 (pas un défaut 100).
+            settings.store.savedVolume = MediaEngineStore.getOutputVolume();
             AudioActions.setOutputVolume(0);
         } else {
-            AudioActions.setOutputVolume(settings.store.savedVolume || 100);
+            // nullish : un vrai 0 sauvegardé doit être respecté (?? et pas ||)
+            AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
         }
     }
 
@@ -151,10 +153,13 @@ function PanelIcon() {
     );
 }
 
-function FakeDeafenPanelButton(props: { nameplate?: any; }) {
+function FakeDeafenPanelButton(props?: { nameplate?: any; }) {
     const { active: enabled, panelButton } = settings.use(["active", "panelButton"]);
 
     if (!panelButton) return null;
+    // garde défensive : le patch passe `arguments[0]`, qui peut être undefined
+    // (ou un mauvais objet) si le composant Discord patché est une fonction
+    // fléchée. On ne lit props qu'avec `?.` pour ne jamais faire planter le rendu.
 
     return (
         <PanelButton
@@ -189,6 +194,12 @@ export default definePlugin({
         },
         {
             // panneau de compte : injecte le bouton à côté du micro/casque/paramètres
+            // NOTE (correctif partiel) : `arguments[0]` est fragile — si le composant
+            // patché est une fonction fléchée, `arguments` peut ne pas exister (ou
+            // pointer sur le mauvais scope). renderPanelButton est rendu défensif
+            // (props optionnels + ?.) pour éviter un crash du rendu, mais la source
+            // des props reste `arguments[0]` : réécrire ce matcher demande un test
+            // runtime impossible ici, donc on le laisse tel quel volontairement.
             find: "#{intl::USER_PROFILE_ACCOUNT_POPOUT_BUTTON_A11Y_LABEL}",
             replacement: {
                 match: /children:\[(?=.{0,25}?accountContainerRef)/,
@@ -232,8 +243,13 @@ export default definePlugin({
     stop() {
         // ne jamais laisser le casque réellement coupé en désactivant le plugin
         if (settings.store.active && settings.store.cutOutput) {
-            AudioActions.setOutputVolume(settings.store.savedVolume || 100);
+            // nullish : respecte un vrai 0 sauvegardé
+            AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
         }
         settings.store.active = false;
+        // rediffuse le vrai état vocal : sinon on reste "sourd" aux yeux des
+        // autres jusqu'à un toggle manuel / une reconnexion (le patch lisait
+        // settings.store.active en direct, désormais remis à false).
+        resendVoiceState();
     }
 });
