@@ -1,7 +1,8 @@
 /* Transitions instantanées (ne touche pas aux animations/spinners). */
-*,
-*::before,
-*::after {
+/* Scopé sous la racine de l'app Discord (#app-mount) pour limiter la portée. */
+#app-mount *,
+#app-mount *::before,
+#app-mount *::after {
     transition-duration: 0.001ms !important;
     transition-delay: 0ms !important;
 }

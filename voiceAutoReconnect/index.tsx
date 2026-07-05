@@ -61,7 +61,11 @@ const settings = definePluginSettings({
 });
 
 function saveTarget() {
-    DataStore.set(STORAGE_KEY, target);
+    // persistance best-effort : capture toute erreur de stockage pour éviter
+    // une promesse rejetée non gérée (et une divergence mémoire/disque silencieuse).
+    DataStore.set(STORAGE_KEY, target).catch(e =>
+        console.error("[VoiceAutoReconnect] échec de la persistance:", e)
+    );
 }
 
 function rejoin(reason: string) {

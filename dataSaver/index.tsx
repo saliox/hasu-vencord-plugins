@@ -32,6 +32,9 @@ const cl = classNameFactory("vc-datasaver-");
 
 const RTCConnectionStore = findStoreLazy("RTCConnectionStore");
 
+// id du setTimeout de démarrage différé, pour l'annuler dans stop()
+let startupTimer: number | undefined;
+
 // réglages Discord (synchronisés au compte) pilotés par le mode éco
 const GifAutoPlay = getUserSettingLazy<boolean>("textAndImages", "gifAutoPlay")!;
 const AnimateEmoji = getUserSettingLazy<boolean>("textAndImages", "animateEmoji")!;
@@ -400,7 +403,10 @@ export default definePlugin({
         // Le mode éco ne doit pas survivre à un redémarrage. On répare aussi une seule
         // fois l'ancien bug qui laissait renderEmbeds/médias bloqués sur "off".
         // Différé : laisse le store de réglages Discord se charger complètement.
-        setTimeout(() => {
+        // On mémorise l'id pour l'annuler dans stop() si le plugin est désactivé
+        // avant que le callback ne s'exécute (sinon il tourne contre un client arrêté).
+        startupTimer = window.setTimeout(() => {
+            startupTimer = undefined;
             // NE PAS couper l'éco si un jeu tourne : il vient (légitimement) d'être
             // rallumé par la détection de jeu au démarrage.
             const gameRunning = (RunningGameStore.getRunningGames?.() ?? []).length > 0;
@@ -419,6 +425,9 @@ export default definePlugin({
     },
 
     stop() {
+        // annuler le démarrage différé s'il n'a pas encore tourné
+        if (startupTimer) window.clearTimeout(startupTimer);
+        startupTimer = undefined;
         // désactiver le plugin ne doit jamais laisser des réglages coupés
         if (settings.store.ecoActive) disableEco();
     }
