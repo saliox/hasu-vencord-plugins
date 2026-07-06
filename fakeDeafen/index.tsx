@@ -61,6 +61,12 @@ const settings = definePluginSettings({
         description: "Migration de l'ancien défaut cutOutput effectuée",
         default: false,
         hidden: true
+    },
+    volumeCutApplied: {
+        type: OptionType.BOOLEAN,
+        description: "Volume de sortie actuellement forcé à 0 par le plugin (état interne)",
+        default: false,
+        hidden: true
     }
 });
 
@@ -75,16 +81,21 @@ function resendVoiceState() {
 function setFakeDeafen(value: boolean) {
     settings.store.active = value;
 
-    if (settings.store.cutOutput) {
-        if (value) {
+    if (value) {
+        if (settings.store.cutOutput) {
             // capture le volume réel AVANT de forcer à 0, sans condition :
             // si l'utilisateur avait déjà 0, on doit restaurer 0 (pas un défaut 100).
             settings.store.savedVolume = MediaEngineStore.getOutputVolume();
             AudioActions.setOutputVolume(0);
-        } else {
-            // nullish : un vrai 0 sauvegardé doit être respecté (?? et pas ||)
-            AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
+            settings.store.volumeCutApplied = true;
         }
+    } else if (settings.store.volumeCutApplied) {
+        // On se fie à `volumeCutApplied` (ce qui a été RÉELLEMENT appliqué), pas à la valeur
+        // courante de `cutOutput` : si l'utilisateur décoche ce réglage pendant que le casque
+        // fantôme est actif, le volume restait coincé à 0 pour de bon (rien ne le restaurait
+        // plus jamais, ni ce toggle ni stop()).
+        AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
+        settings.store.volumeCutApplied = false;
     }
 
     resendVoiceState();
@@ -241,10 +252,12 @@ export default definePlugin({
     },
 
     stop() {
-        // ne jamais laisser le casque réellement coupé en désactivant le plugin
-        if (settings.store.active && settings.store.cutOutput) {
+        // ne jamais laisser le casque réellement coupé en désactivant le plugin — se fie à
+        // volumeCutApplied (l'état réellement appliqué), pas à cutOutput (voir setFakeDeafen)
+        if (settings.store.volumeCutApplied) {
             // nullish : respecte un vrai 0 sauvegardé
             AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
+            settings.store.volumeCutApplied = false;
         }
         settings.store.active = false;
         // rediffuse le vrai état vocal : sinon on reste "sourd" aux yeux des

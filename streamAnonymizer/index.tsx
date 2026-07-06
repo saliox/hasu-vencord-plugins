@@ -146,11 +146,16 @@ export default definePlugin({
     patches: [
         {
             // fonction centrale de résolution des noms (getName/useName) :
-            // couvre liste des membres, messages, mentions, DM, vocal, popouts
+            // couvre liste des membres, messages, mentions, DM, vocal, popouts.
+            // On passe le tableau d'arguments ENTIER à mask() plutôt qu'un index fixe (a[2]) :
+            // rien ne garantit que getName et useName partagent exactement la même position pour
+            // l'objet utilisateur (useName est la variante "hook" de getName, pas forcément un
+            // simple alias) — un mauvais index renverrait silencieusement le VRAI pseudo (voir
+            // mask() : recherche l'objet utilisateur par forme plutôt que par position).
             find: "getNickname:",
             replacement: {
                 match: /(?<=\{getNickname:\i,)getName:(\i),useName:(\i)(?=\})/,
-                replace: "getName:(...a)=>$self.mask($1(...a),a[2]),useName:(...a)=>$self.mask($2(...a),a[2])"
+                replace: "getName:(...a)=>$self.mask($1(...a),a),useName:(...a)=>$self.mask($2(...a),a)"
             }
         }
     ],
@@ -160,13 +165,21 @@ export default definePlugin({
         render: MaskButton
     },
 
-    // appelée par le patch avec le nom résolu + l'objet utilisateur.
+    // appelée par le patch avec le nom résolu + le tableau d'arguments passé à getName/useName.
     // Chemin CHAUD (chaque nom rendu) : on sort au plus vite et on lit
     // settings.store une seule fois.
-    mask(name: string, user: any) {
+    mask(name: string, args: any[]) {
         try {
             if (!isMaskingActive()) return name;
-            if (!user || typeof user !== "object" || !user.id) return name;
+
+            // Repère l'objet utilisateur par sa FORME (id + username/globalName/discriminator)
+            // plutôt que par une position fixe dans `args` : un salon/serveur a aussi un `.id`
+            // mais jamais ces champs-là, ce qui évite de masquer/comparer le mauvais objet.
+            const user = Array.isArray(args)
+                ? args.find((a) => a && typeof a === "object" && typeof a.id === "string" &&
+                    (typeof a.username === "string" || typeof a.globalName === "string" || typeof a.discriminator === "string"))
+                : null;
+            if (!user) return name;
 
             const id: string = user.id;
             const s = settings.store;

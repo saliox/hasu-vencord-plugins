@@ -31,6 +31,7 @@ let startupTimer: number | undefined;
 let missCount = 0;
 let lastRejoinAt = 0;
 let rtcState = ""; // état de la connexion vocale RTC (via RTC_CONNECTION_STATE)
+let lastRtcDownAt = 0; // horodatage de la dernière coupure RTC vue (voir VOICE_CHANNEL_SELECT)
 
 const settings = definePluginSettings({
     reconnectOnDrop: {
@@ -132,9 +133,17 @@ export default definePlugin({
 
     flux: {
         // l'utilisateur sélectionne un salon vocal (rejoint / se déplace / quitte) = son INTENTION.
-        // NB : cet événement n'est PAS émis par une coupure réseau, seulement par une action
-        // explicite (bouton, déplacement, déconnexion) — donc target ne s'efface qu'à un départ voulu.
+        // NB : cet événement n'est censé PAS être émis par une coupure réseau, seulement par une
+        // action explicite (bouton, déplacement, déconnexion) — donc target ne s'efface qu'à un
+        // départ voulu. Filet de sécurité si cette hypothèse s'avérait fausse dans un cas non testé
+        // (ex. le client émettrait aussi channelId:null lors d'une coupure) : on ne traite un
+        // channelId:null comme un départ VOLONTAIRE que s'il n'est PAS immédiatement précédé d'une
+        // coupure RTC — sinon on garde `target` intact pour laisser tick() tenter la reconnexion.
         VOICE_CHANNEL_SELECT({ channelId }: { channelId: string | null; }) {
+            if (channelId === null && Date.now() - lastRtcDownAt < 3000) {
+                missCount = 0;
+                return;
+            }
             target = channelId ? { channelId, at: Date.now() } : null;
             saveTarget();
             missCount = 0;
@@ -143,6 +152,7 @@ export default definePlugin({
         RTC_CONNECTION_STATE({ state, context }: { state: string; context?: string; }) {
             if (context && context !== "default") return;
             rtcState = state;
+            if (state === "RTC_DISCONNECTED" || state === "DISCONNECTED") lastRtcDownAt = Date.now();
         }
     },
 
