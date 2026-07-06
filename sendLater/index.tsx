@@ -137,8 +137,8 @@ function addScheduled(channelId: string, content: string, dueAt: number): Schedu
 
 /**
  * Convertit une saisie utilisateur en horodatage d'envoi.
- * Accepte les durées relatives ("10m", "1h30", "2h", "90s", "1d")
- * et les heures absolues du jour ("20:00", "9h30").
+ * Accepte les durées relatives ("10m", "1h30", "2h", "90s", "1d", "9h30")
+ * et les heures absolues du jour au format "HH:MM" ("20:00").
  * Renvoie null si la saisie est invalide ou dans le passé.
  */
 const DURATION_UNITS: Record<string, number> = { d: 86400_000, j: 86400_000, h: 3600_000, m: 60_000, s: 1000 };
