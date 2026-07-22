@@ -31,7 +31,11 @@ const settings = definePluginSettings({
     cutOutput: {
         type: OptionType.BOOLEAN,
         description: "⚠️ Couper AUSSI ton casque en plus de l'apparence (tu n'entendras PLUS les autres). Laisse désactivé pour paraître sourd tout en entendant et parlant normalement.",
-        default: false
+        default: false,
+        // applique le changement en direct : sans ça, décocher cutOutput pendant que le
+        // casque fantôme est actif laissait le volume coincé à 0 jusqu'au prochain toggle
+        // de `active` (rien ne rétablissait le son tout de suite).
+        onChange: () => applyCutOutput()
     },
     panelButton: {
         type: OptionType.BOOLEAN,
@@ -78,11 +82,14 @@ function resendVoiceState() {
     VoiceActions.toggleSelfMute();
 }
 
-function setFakeDeafen(value: boolean) {
-    settings.store.active = value;
-
-    if (value) {
-        if (settings.store.cutOutput) {
+// applique (ou annule) la coupure réelle du volume selon l'état courant de
+// `active` et `cutOutput`. Appelée à l'activation/désactivation du casque
+// fantôme ET quand `cutOutput` change en direct (voir son onChange) : sinon
+// décocher cutOutput pendant que le casque fantôme est actif ne faisait rien
+// tant qu'on n'avait pas retoggle `active` (volume coincé à 0).
+function applyCutOutput() {
+    if (settings.store.active && settings.store.cutOutput) {
+        if (!settings.store.volumeCutApplied) {
             // capture le volume réel AVANT de forcer à 0, sans condition :
             // si l'utilisateur avait déjà 0, on doit restaurer 0 (pas un défaut 100).
             settings.store.savedVolume = MediaEngineStore.getOutputVolume();
@@ -97,6 +104,11 @@ function setFakeDeafen(value: boolean) {
         AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
         settings.store.volumeCutApplied = false;
     }
+}
+
+function setFakeDeafen(value: boolean) {
+    settings.store.active = value;
+    applyCutOutput();
 
     resendVoiceState();
     showToast(

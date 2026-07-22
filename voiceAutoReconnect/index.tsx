@@ -157,6 +157,16 @@ export default definePlugin({
     },
 
     async start() {
+        // réinitialise l'état du watchdog : ces variables sont au niveau module et
+        // survivent à un stop() (désactivation du plugin sans redémarrer Discord).
+        // Sans ce reset, un rtcState "RTC_DISCONNECTED" capté juste avant l'arrêt
+        // restait figé ; à la réactivation, le premier tick() le prenait pour une
+        // coupure en cours et forçait un rejoin alors que le vocal allait très bien.
+        missCount = 0;
+        lastRejoinAt = 0;
+        rtcState = "";
+        lastRtcDownAt = 0;
+
         const saved = await DataStore.get<Target | null>(STORAGE_KEY) ?? null;
 
         if (settings.store.reconnectOnStartup && saved?.channelId) {
