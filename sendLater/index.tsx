@@ -84,12 +84,18 @@ const inFlight = new Set<string>();
 const listeners = new Set<() => void>();
 
 function save() {
-    // persistance best-effort : on ne bloque pas l'UI dessus, mais on capture
-    // toute erreur de stockage pour éviter une promesse rejetée non gérée.
-    DataStore.set(STORAGE_KEY, scheduled).catch(e =>
-        console.error("[SendLater] échec de la persistance:", e)
-    );
+    // persistance best-effort par défaut : la plupart des appelants (UI) n'ont pas besoin
+    // d'attendre l'écriture. On capture toute erreur de stockage pour éviter une promesse
+    // rejetée non gérée, MAIS on renvoie quand même la promesse : certains appelants (voir
+    // sendScheduled) doivent véritablement attendre que l'écriture soit terminée avant de
+    // considérer la séquence envoi+nettoyage comme close (sinon un crash entre l'envoi HTTP
+    // réussi et la fin de cette écriture laisserait le message "encore dû" sur disque, causant
+    // un renvoi en double au prochain lancement).
+    const written = DataStore.set(STORAGE_KEY, scheduled).catch(e => {
+        console.error("[SendLater] échec de la persistance:", e);
+    });
     listeners.forEach(l => l());
+    return written;
 }
 
 function usePendingVersion() {
@@ -117,7 +123,7 @@ function jumpToChannel(msg: ScheduledMessage) {
 
 function removeScheduled(id: string) {
     scheduled = scheduled.filter(m => m.id !== id);
-    save();
+    return save();
 }
 
 function addScheduled(channelId: string, content: string, dueAt: number): ScheduledMessage {
@@ -204,7 +210,11 @@ async function sendScheduled(msg: ScheduledMessage) {
         });
         if (res?.ok === false) throw new Error(`HTTP ${res.status}`);
 
-        removeScheduled(msg.id);
+        // attend que la suppression soit VRAIMENT écrite sur disque avant de considérer
+        // l'envoi comme entièrement terminé : sinon un crash dans cette fenêtre laisserait
+        // le message "encore dû" sur disque et le ferait renvoyer en double au prochain
+        // lancement (voir le commentaire de save()).
+        await removeScheduled(msg.id);
         if (settings.store.notifyOnSend) {
             showNotification({
                 title: "Send Later",
@@ -540,7 +550,24 @@ export default definePlugin({
     ),
 
     async start() {
-        scheduled = await DataStore.get<ScheduledMessage[]>(STORAGE_KEY) ?? [];
+        // capturé AVANT l'await : si l'utilisateur planifie un message (addScheduled, qui pousse
+        // dans ce même tableau `scheduled`) pendant que la lecture DataStore est en vol, on ne
+        // veut pas que la ligne suivante l'écrase silencieusement.
+        const inMemoryBeforeLoad = scheduled;
+
+        const rawStored = await DataStore.get<unknown>(STORAGE_KEY);
+        // validation minimale : une entrée corrompue/malformée ne doit pas planter start()
+        // (ex. avorter la mise en place de sweepTimer) ni rester silencieusement vide.
+        const fromDisk = Array.isArray(rawStored) ? rawStored as ScheduledMessage[] : [];
+        if (rawStored != null && !Array.isArray(rawStored)) {
+            console.warn("[SendLater] valeur stockée invalide (pas un tableau), ignorée:", rawStored);
+        }
+
+        // fusionne au lieu d'écraser : tout ce qui a été ajouté en mémoire pendant l'attente et
+        // qui n'est pas encore présent dans la version chargée du disque doit être conservé.
+        const addedDuringLoad = inMemoryBeforeLoad.filter(m => !fromDisk.some(f => f.id === m.id));
+        scheduled = addedDuringLoad.length > 0 ? [...fromDisk, ...addedDuringLoad] : fromDisk;
+        if (addedDuringLoad.length > 0) save();
 
         const missed = scheduled.filter(m => m.dueAt <= Date.now() && !m.paused && !m.error);
         if (missed.length > 0) {

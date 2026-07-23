@@ -18,6 +18,7 @@ const TICK_MS = 4000;
 const GRACE_TICKS = 2;          // ~8 s de coupure avant qu'on rejoigne (laisse Discord tenter d'abord)
 const STARTUP_DELAY_MS = 8000;  // laisse la passerelle se connecter au démarrage
 const REJOIN_DEBOUNCE_MS = 5000;
+const MAX_CONSECUTIVE_FAILURES = 6; // au-delà, on abandonne (banni/expulsé/salon plein…) au lieu de boucler à l'infini
 
 interface Target {
     channelId: string;
@@ -32,6 +33,20 @@ let missCount = 0;
 let lastRejoinAt = 0;
 let rtcState = ""; // état de la connexion vocale RTC (via RTC_CONNECTION_STATE)
 let lastRtcDownAt = 0; // horodatage de la dernière coupure RTC vue (voir VOICE_CHANNEL_SELECT)
+let consecutiveFailures = 0; // tentatives de rejoin consécutives sans succès confirmé
+// tant que false, on ignore les VOICE_CHANNEL_SELECT à channelId:null : au tout début du
+// démarrage, Discord peut émettre un événement de synchronisation avec channelId:null avant
+// même que lastRtcDownAt ait une valeur utile, ce qui viderait `target` avant que la
+// reconnexion au démarrage ait eu sa chance de s'exécuter.
+let startupComplete = false;
+
+/** Valide grossièrement la forme d'une valeur chargée depuis DataStore avant de lui faire confiance. */
+function isValidTarget(value: unknown): value is Target {
+    if (!value || typeof value !== "object") return false;
+    const v = value as Record<string, unknown>;
+    return typeof v.channelId === "string" && v.channelId.length > 0
+        && typeof v.at === "number" && Number.isFinite(v.at);
+}
 
 const settings = definePluginSettings({
     reconnectOnDrop: {
@@ -83,9 +98,22 @@ function rejoin(reason: string) {
     }
 }
 
+function giveUp() {
+    // trop d'échecs consécutifs (banni, expulsé, salon plein/restreint…) : on arrête de
+    // spammer des tentatives (et des toasts) et on efface la cible.
+    target = null;
+    saveTarget();
+    missCount = 0;
+    consecutiveFailures = 0;
+    if (settings.store.notify) {
+        showToast("Reconnexion au vocal abandonnée après plusieurs échecs.", Toasts.Type.FAILURE);
+    }
+}
+
 function tick() {
     if (!settings.store.reconnectOnDrop || !target) {
         missCount = 0;
+        consecutiveFailures = 0;
         return;
     }
 
@@ -95,6 +123,7 @@ function tick() {
     if (current && current !== target.channelId) {
         target = { channelId: current, at: Date.now() };
         saveTarget();
+        consecutiveFailures = 0;
     }
 
     // connecté au bon salon ET RTC pas tombé => tout va bien.
@@ -102,6 +131,7 @@ function tick() {
     const rtcDown = rtcState === "RTC_DISCONNECTED" || rtcState === "DISCONNECTED";
     if (current === target.channelId && !rtcDown) {
         missCount = 0;
+        consecutiveFailures = 0;
         return;
     }
 
@@ -118,8 +148,13 @@ function tick() {
 
     missCount++;
     if (missCount >= GRACE_TICKS) {
-        rejoin("coupure réseau");
         missCount = 0;
+        consecutiveFailures++;
+        if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
+            giveUp();
+            return;
+        }
+        rejoin("coupure réseau");
     }
 }
 
@@ -135,11 +170,18 @@ export default definePlugin({
         // l'utilisateur sélectionne un salon vocal (rejoint / se déplace / quitte) = son INTENTION.
         // NB : cet événement n'est censé PAS être émis par une coupure réseau, seulement par une
         // action explicite (bouton, déplacement, déconnexion) — donc target ne s'efface qu'à un
-        // départ voulu. Filet de sécurité si cette hypothèse s'avérait fausse dans un cas non testé
-        // (ex. le client émettrait aussi channelId:null lors d'une coupure) : on ne traite un
-        // channelId:null comme un départ VOLONTAIRE que s'il n'est PAS immédiatement précédé d'une
-        // coupure RTC — sinon on garde `target` intact pour laisser tick() tenter la reconnexion.
+        // départ voulu. Filets de sécurité pour deux cas non testés où channelId:null ne serait
+        // PAS un départ volontaire :
+        //  1) coupure RTC toute récente (< 3s) — on laisse tick() tenter la reconnexion ;
+        //  2) démarrage en cours (avant startupComplete) — Discord peut émettre un événement de
+        //     synchronisation à channelId:null pendant que la passerelle se met à jour, avant même
+        //     que la reconnexion au démarrage ait eu la chance de s'exécuter ; on ne veut surtout
+        //     pas que ça vide `target` juste après l'avoir chargé depuis le stockage.
         VOICE_CHANNEL_SELECT({ channelId }: { channelId: string | null; }) {
+            if (channelId === null && !startupComplete) {
+                missCount = 0;
+                return;
+            }
             if (channelId === null && Date.now() - lastRtcDownAt < 3000) {
                 missCount = 0;
                 return;
@@ -147,6 +189,7 @@ export default definePlugin({
             target = channelId ? { channelId, at: Date.now() } : null;
             saveTarget();
             missCount = 0;
+            consecutiveFailures = 0;
         },
         // état réel de la connexion vocale ; on ignore les autres contextes (stream…)
         RTC_CONNECTION_STATE({ state, context }: { state: string; context?: string; }) {
@@ -157,9 +200,17 @@ export default definePlugin({
     },
 
     async start() {
-        const saved = await DataStore.get<Target | null>(STORAGE_KEY) ?? null;
+        missCount = 0;
+        consecutiveFailures = 0;
+        startupComplete = false;
 
-        if (settings.store.reconnectOnStartup && saved?.channelId) {
+        const rawSaved = await DataStore.get<unknown>(STORAGE_KEY);
+        const saved = isValidTarget(rawSaved) ? rawSaved : null;
+        if (rawSaved != null && !saved) {
+            console.warn("[VoiceAutoReconnect] valeur stockée invalide, ignorée:", rawSaved);
+        }
+
+        if (settings.store.reconnectOnStartup && saved) {
             const maxAge = settings.store.startupMaxAge; // minutes, 0 = toujours
             const ageMin = (Date.now() - saved.at) / 60000;
             if (maxAge === 0 || ageMin <= maxAge) {
@@ -170,13 +221,18 @@ export default definePlugin({
                     if (target && !SelectedChannelStore.getVoiceChannelId()) {
                         rejoin("redémarrage");
                     }
+                    // la tentative de reconnexion au démarrage a eu sa chance (ou n'était pas
+                    // nécessaire) : les événements channelId:null redeviennent dignes de confiance.
+                    startupComplete = true;
                 }, STARTUP_DELAY_MS);
             } else {
                 target = null;
+                startupComplete = true;
             }
         } else {
             // pas de reconnexion au démarrage : on repart propre pour cette session
             target = null;
+            startupComplete = true;
         }
         saveTarget();
 
@@ -188,6 +244,7 @@ export default definePlugin({
         if (startupTimer) window.clearTimeout(startupTimer);
         watchdog = undefined;
         startupTimer = undefined;
+        startupComplete = false;
     },
 
     settingsAboutComponent: () => (

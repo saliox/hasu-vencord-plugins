@@ -7,15 +7,22 @@
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import { definePluginSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
+import { Margins } from "@utils/margins";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
-import { findByPropsLazy, findComponentByCodeLazy, findStoreLazy } from "@webpack";
-import { SelectedChannelStore, showToast, Toasts } from "@webpack/common";
+import { findByPropsLazy, findComponentByCodeLazy, findModuleFactory, findStoreLazy } from "@webpack";
+import { Forms, SelectedChannelStore, showToast, Toasts } from "@webpack/common";
 
 const VoiceActions = findByPropsLazy("toggleSelfMute", "toggleSelfDeaf");
 const AudioActions = findByPropsLazy("setOutputVolume", "setInputVolume");
 const MediaEngineStore = findStoreLazy("MediaEngineStore");
 // bouton du panneau vocal (à côté du micro / casque / paramètres)
 const PanelButton = findComponentByCodeLazy(".GREEN,positionKeyStemOverride:");
+
+// même chaîne que `find` du patch gateway plus bas : un seul endroit à mettre à jour si
+// Discord change son code, et ça garantit que la vérification cible EXACTEMENT le même module.
+const GATEWAY_MODULE_FIND = '"REQUEST_CHANNEL_INFO"';
+
+let patchCheckTimer: number | undefined;
 
 const settings = definePluginSettings({
     fakeDeaf: {
@@ -31,7 +38,11 @@ const settings = definePluginSettings({
     cutOutput: {
         type: OptionType.BOOLEAN,
         description: "⚠️ Couper AUSSI ton casque en plus de l'apparence (tu n'entendras PLUS les autres). Laisse désactivé pour paraître sourd tout en entendant et parlant normalement.",
-        default: false
+        default: false,
+        // sans ça, cocher/décocher pendant que le casque fantôme est déjà actif n'a aucun
+        // effet tant qu'on ne le désactive/réactive pas manuellement — on ré-applique tout de
+        // suite, comme le fait discordOptimizer pour ses propres réglages (onChange: () => apply()).
+        onChange: () => applyCutOutput()
     },
     panelButton: {
         type: OptionType.BOOLEAN,
@@ -78,22 +89,86 @@ function resendVoiceState() {
     VoiceActions.toggleSelfMute();
 }
 
-function setFakeDeafen(value: boolean) {
-    settings.store.active = value;
+// Réconcilie l'état RÉEL du volume de sortie (`volumeCutApplied`) avec le réglage `cutOutput`
+// courant. Appelée à l'activation et à chaque changement du réglage `cutOutput` (onChange),
+// pour que cocher/décocher pendant que le casque fantôme est déjà actif ait un effet immédiat
+// (comme discordOptimizer le fait pour ses propres réglages).
+function applyCutOutput() {
+    if (!settings.store.active) return; // rien à réconcilier si le casque fantôme est inactif
 
-    if (value) {
-        if (settings.store.cutOutput) {
-            // capture le volume réel AVANT de forcer à 0, sans condition :
-            // si l'utilisateur avait déjà 0, on doit restaurer 0 (pas un défaut 100).
-            settings.store.savedVolume = MediaEngineStore.getOutputVolume();
-            AudioActions.setOutputVolume(0);
-            settings.store.volumeCutApplied = true;
-        }
-    } else if (settings.store.volumeCutApplied) {
+    if (settings.store.cutOutput && !settings.store.volumeCutApplied) {
+        // capture le volume réel AVANT de forcer à 0, sans condition :
+        // si l'utilisateur avait déjà 0, on doit restaurer 0 (pas un défaut 100).
+        settings.store.savedVolume = MediaEngineStore.getOutputVolume();
+        AudioActions.setOutputVolume(0);
+        settings.store.volumeCutApplied = true;
+    } else if (!settings.store.cutOutput && settings.store.volumeCutApplied) {
         // On se fie à `volumeCutApplied` (ce qui a été RÉELLEMENT appliqué), pas à la valeur
         // courante de `cutOutput` : si l'utilisateur décoche ce réglage pendant que le casque
         // fantôme est actif, le volume restait coincé à 0 pour de bon (rien ne le restaurait
         // plus jamais, ni ce toggle ni stop()).
+        AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
+        settings.store.volumeCutApplied = false;
+    }
+}
+
+/**
+ * Vérifie que le patch gateway (qui réécrit self_mute/self_deaf dans le paquet voiceStateUpdate)
+ * a réellement été appliqué, en inspectant le code compilé du module webpack visé (même chaîne
+ * `find` que le patch ci-dessous). C'est actuellement la seule façon fiable de détecter un échec
+ * silencieux du patch (ex. Discord renomme les variables et le regex ne matche plus) : Vencord
+ * n'expose pas d'état succès/échec par patch en dehors des builds de développement.
+ * @returns true = patch confirmé présent, false = patch confirmé absent (le plugin ne protège
+ *   RIEN), null = indéterminable (module pas encore chargé, ou API indisponible) — dans ce cas
+ *   on ne doit ni alarmer ni rassurer l'utilisateur.
+ */
+function verifyGatewayPatch(): boolean | null {
+    try {
+        const factory = findModuleFactory(GATEWAY_MODULE_FIND);
+        if (!factory) return null;
+        const src = String(factory);
+        return src.includes(".fakeMute(") && src.includes(".fakeDeaf(");
+    } catch {
+        return null;
+    }
+}
+
+let patchWarningShown = false;
+
+/** Revérifie le patch et, s'il est confirmé absent alors que le casque fantôme est censé être
+ * actif, prévient clairement l'utilisateur au lieu de le laisser croire qu'il est protégé. */
+function checkPatchAndWarn(force = false) {
+    const result = verifyGatewayPatch();
+
+    if (result === false && settings.store.active && (force || !patchWarningShown)) {
+        patchWarningShown = true;
+        console.error(
+            "[FakeDeafen] Le patch de la passerelle (self_mute/self_deaf) semble ne PAS avoir été appliqué " +
+            "(Discord a probablement changé son code interne). Le casque fantôme n'offre actuellement AUCUNE " +
+            "protection réelle : ton vrai état vocal (micro/casque) est envoyé tel quel."
+        );
+        showToast(
+            "⚠️ FakeDeafen : le patch interne semble cassé (mise à jour de Discord ?). Aucune protection réelle n'est active.",
+            Toasts.Type.FAILURE
+        );
+    } else if (result === true) {
+        patchWarningShown = false; // se réarme si jamais ça se dégrade plus tard
+    }
+
+    return result;
+}
+
+function setFakeDeafen(value: boolean) {
+    settings.store.active = value;
+
+    if (value) {
+        applyCutOutput();
+        // vérifie tout de suite que la protection est réellement effective, et prévient
+        // clairement si ce n'est pas le cas plutôt que de laisser afficher "actif" à tort.
+        checkPatchAndWarn(true);
+    } else if (settings.store.volumeCutApplied) {
+        // toujours restaurer le volume à la désactivation, même si `applyCutOutput` n'a pas pu
+        // tourner entretemps (ex. cutOutput resté coché) — voir son commentaire pour le détail.
         AudioActions.setOutputVolume(settings.store.savedVolume ?? 100);
         settings.store.volumeCutApplied = false;
     }
@@ -197,7 +272,7 @@ export default definePlugin({
     patches: [
         {
             // module gateway : construction du paquet voiceStateUpdate (op 4)
-            find: '"REQUEST_CHANNEL_INFO"',
+            find: GATEWAY_MODULE_FIND,
             replacement: {
                 match: /self_mute:(\i),self_deaf:(\i),self_video:(\i)/,
                 replace: "self_mute:$self.fakeMute($1),self_deaf:$self.fakeDeaf($2),self_video:$3"
@@ -249,9 +324,21 @@ export default definePlugin({
                 }
             } catch { /* store vocal pas prêt */ }
         }
+
+        patchWarningShown = false;
+        // léger délai pour laisser le module webpack visé le temps d'être enregistré ;
+        // ne concerne que l'avertissement (ex. si `active` était déjà true à la reprise
+        // d'une session précédente) — le check au toggle (setFakeDeafen) reste immédiat.
+        patchCheckTimer = window.setTimeout(() => {
+            patchCheckTimer = undefined;
+            checkPatchAndWarn();
+        }, 5000);
     },
 
     stop() {
+        if (patchCheckTimer) window.clearTimeout(patchCheckTimer);
+        patchCheckTimer = undefined;
+
         // ne jamais laisser le casque réellement coupé en désactivant le plugin — se fie à
         // volumeCutApplied (l'état réellement appliqué), pas à cutOutput (voir setFakeDeafen)
         if (settings.store.volumeCutApplied) {
@@ -264,5 +351,21 @@ export default definePlugin({
         // autres jusqu'à un toggle manuel / une reconnexion (le patch lisait
         // settings.store.active en direct, désormais remis à false).
         resendVoiceState();
+    },
+
+    settingsAboutComponent: () => {
+        const patchStatus = verifyGatewayPatch();
+        if (patchStatus !== false) return null;
+
+        return (
+            <Forms.FormText style={{ color: "var(--status-danger)" }} className={Margins.bottom8}>
+                ⚠️ Le patch interne (passerelle) semble ne PAS être appliqué (mise à jour de Discord ?).
+                <b> Le casque fantôme n'offre actuellement AUCUNE protection réelle</b> : ton vrai état
+                vocal (micro/casque) est envoyé tel quel aux autres.
+                <br />
+                ⚠️ Internal gateway patch check FAILED (Discord update?). <b>FakeDeafen currently
+                provides NO real protection</b> — your true mic/deafen state is sent as-is.
+            </Forms.FormText>
+        );
     }
 });

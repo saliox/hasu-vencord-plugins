@@ -363,19 +363,25 @@ export default definePlugin({
     },
 
     flux: {
-        RUNNING_GAMES_CHANGE({ games }: { games: unknown[]; }) {
+        RUNNING_GAMES_CHANGE({ games }: { games: unknown; }) {
             if (!settings.store.autoGame) return;
 
-            if (games.length > 0 && !settings.store.ecoActive) {
-                enableEco(true);
-                showNotification({
-                    title: "DataSaver",
-                    body: "Jeu détecté : mode éco activé pour libérer ta connexion. Il se coupera à la fermeture du jeu."
-                });
-            } else if (games.length === 0 && settings.store.ecoActive && settings.store.autoEngaged) {
-                disableEco();
-                showToast("Jeu fermé : mode éco désactivé, réglages restaurés", Toasts.Type.SUCCESS);
-            }
+            // même garde défensive que le reste du fichier (store/API pas prêt, forme
+            // inattendue…) : `games` n'est pas garanti d'être un tableau ici.
+            try {
+                const count = Array.isArray(games) ? games.length : 0;
+
+                if (count > 0 && !settings.store.ecoActive) {
+                    enableEco(true);
+                    showNotification({
+                        title: "DataSaver",
+                        body: "Jeu détecté : mode éco activé pour libérer ta connexion. Il se coupera à la fermeture du jeu."
+                    });
+                } else if (count === 0 && settings.store.ecoActive && settings.store.autoEngaged) {
+                    disableEco();
+                    showToast("Jeu fermé : mode éco désactivé, réglages restaurés", Toasts.Type.SUCCESS);
+                }
+            } catch { /* store pas prêt / forme inattendue : on ignore cet évènement */ }
         }
     },
 
